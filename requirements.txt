@@ -1,0 +1,31 @@
+# Core Intelligence
+google-cloud-aiplatform    # Users own Gemini Flash API
+sqlite3                    # Memory storage
+
+# System Integration
+psutil                     # System monitoring
+pywin32; platform_system == 'Windows'    # Windows system ops
+pyobjc-framework-Cocoa; platform_system == 'Darwin'  # macOS integration
+
+# User Interface
+PySide6                   # Modern UI framework
+material-widgets          # Material Design components
+
+# Network & Communication
+paho-mqtt                 # IoT communication
+httpx                     # Modern HTTP client
+elasticsearch            # Quick search capabilities
+
+# Billing
+stripe                    # Payment processing
+flask                     # Webhook handling
+pydantic                  # Data validation
+
+# Security
+cryptography             # Security operations
+python-magic            # File type validation
+
+# Utilities
+watchdog                # File system events
+python-dotenv          # Environment management
+loguru                 # Smart logging
