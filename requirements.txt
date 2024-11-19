@@ -1,6 +1,5 @@
 # Core Intelligence
 google-cloud-aiplatform    # Users own Gemini Flash API
-sqlite3                    # Memory storage
 
 # System Integration
 psutil                     # System monitoring
@@ -9,7 +8,7 @@ pyobjc-framework-Cocoa; platform_system == 'Darwin'  # macOS integration
 
 # User Interface
 PySide6                   # Modern UI framework
-material-widgets          # Material Design components
+qt-material              # Material Design for Qt
 
 # Network & Communication
 paho-mqtt                 # IoT communication
