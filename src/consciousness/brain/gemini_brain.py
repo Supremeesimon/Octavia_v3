@@ -1,88 +1,104 @@
 """
-Octavia's Core Intelligence using Gemini Flash
+Octavia's Gemini-powered Brain
 """
 
 import os
 from typing import Dict, List, Optional
-from google.cloud import aiplatform
 from loguru import logger
+import vertexai
+from vertexai.preview.generative_models import GenerativeModel, ChatSession
+from vertexai.preview.language_models import ChatModel
 
 class GeminiBrain:
-    """Core intelligence class using Gemini Flash"""
+    """Brain powered by Google's Gemini Flash API"""
     
     def __init__(self):
-        """Initialize Gemini Flash connection"""
+        """Initialize the Gemini brain"""
         try:
-            # Initialize Google Cloud AI Platform
-            aiplatform.init(
-                project=os.getenv("GOOGLE_CLOUD_PROJECT"),
-                location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
-            )
-            self.model_name = os.getenv("GEMINI_MODEL_NAME", "gemini-1.0-pro")
-            logger.info(f"Initialized Gemini Brain with model: {self.model_name}")
+            # Initialize Vertex AI
+            project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
+            location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+            
+            if not project_id:
+                raise ValueError("GOOGLE_CLOUD_PROJECT environment variable not set")
+            
+            vertexai.init(project=project_id, location=location)
+            
+            # Initialize Gemini model
+            self.model = GenerativeModel("gemini-pro")
+            self.chat = self.model.start_chat()
+            logger.info("Successfully initialized Gemini brain")
+            
         except Exception as e:
-            logger.error(f"Failed to initialize Gemini Brain: {e}")
+            logger.error(f"Failed to initialize Gemini brain: {e}")
             raise
 
-    async def think(self, 
-                   message: str, 
-                   context: Optional[Dict] = None, 
-                   history: Optional[List[Dict]] = None) -> str:
+    async def think(self, message: str, context: Dict, history: List[Dict]) -> str:
         """
-        Process a message using Gemini Flash
+        Process a message with context and history to generate a response
         
         Args:
             message: The user's message
-            context: Current context (system state, user preferences, etc.)
-            history: Previous conversation history
+            context: Current system context and user preferences
+            history: Recent conversation history
             
         Returns:
-            Gemini's response
+            Octavia's response
         """
         try:
-            # Prepare the prompt with context and history
-            prompt = self._prepare_prompt(message, context, history)
+            # Format context and history for the model
+            formatted_context = self._format_context(context)
+            formatted_history = self._format_history(history)
             
-            # Get prediction from Gemini
-            response = await self._get_gemini_response(prompt)
+            # Combine everything into a prompt
+            prompt = f"{formatted_context}\n\n{formatted_history}\nUser: {message}\nOctavia:"
             
-            logger.info("Successfully processed message through Gemini")
-            return response
+            # Get response from Gemini
+            response = self.chat.send_message(prompt)
+            
+            return response.text
+            
         except Exception as e:
-            logger.error(f"Error processing message through Gemini: {e}")
-            return "I apologize, but I'm having trouble processing that right now."
+            logger.error(f"Error in think: {e}")
+            return "I apologize, but I'm having trouble processing that right now. Could you try again?"
 
-    def _prepare_prompt(self, 
-                       message: str, 
-                       context: Optional[Dict] = None, 
-                       history: Optional[List[Dict]] = None) -> str:
-        """Prepare the prompt for Gemini with context and history"""
-        prompt_parts = []
-        
-        # Add context if available
-        if context:
+    def _format_context(self, context: Dict) -> str:
+        """Format context for the model"""
+        try:
             system_state = context.get('system_state', {})
             user_prefs = context.get('user_preferences', {})
-            prompt_parts.append(f"Current System State: {system_state}")
-            prompt_parts.append(f"User Preferences: {user_prefs}")
-        
-        # Add conversation history if available
-        if history:
-            for entry in history[-5:]:  # Last 5 exchanges
-                prompt_parts.append(f"User: {entry['user']}")
-                prompt_parts.append(f"Assistant: {entry['assistant']}")
-        
-        # Add current message
-        prompt_parts.append(f"User: {message}")
-        
-        return "\n".join(prompt_parts)
-
-    async def _get_gemini_response(self, prompt: str) -> str:
-        """Get response from Gemini Flash API"""
-        try:
-            # TODO: Implement actual Gemini Flash API call
-            # This is a placeholder until we have API access
-            return "Gemini Flash integration pending API access"
+            
+            context_str = "Current Context:\n"
+            
+            if system_state:
+                context_str += f"System State: {system_state}\n"
+            
+            if user_prefs:
+                context_str += f"User Preferences: {user_prefs}\n"
+            
+            return context_str
         except Exception as e:
-            logger.error(f"Error calling Gemini API: {e}")
-            raise
+            logger.error(f"Error formatting context: {e}")
+            return ""
+
+    def _format_history(self, history: List[Dict]) -> str:
+        """Format conversation history for the model"""
+        try:
+            if not history:
+                return ""
+            
+            history_str = "Recent Conversation:\n"
+            
+            for entry in history:
+                user_msg = entry.get('user', '')
+                assistant_msg = entry.get('assistant', '')
+                
+                if user_msg:
+                    history_str += f"User: {user_msg}\n"
+                if assistant_msg:
+                    history_str += f"Octavia: {assistant_msg}\n"
+            
+            return history_str
+        except Exception as e:
+            logger.error(f"Error formatting history: {e}")
+            return ""
