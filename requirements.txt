@@ -1,30 +1,14 @@
 # Core Intelligence
-google-cloud-aiplatform    # Users own Gemini Flash API
+google-cloud-aiplatform>=1.35.0    # Gemini Flash API integration
+vertexai>=0.0.1                    # Vertex AI helper
 
 # System Integration
-psutil                     # System monitoring
-pywin32; platform_system == 'Windows'    # Windows system ops
-pyobjc-framework-Cocoa; platform_system == 'Darwin'  # macOS integration
+pyobjc-framework-Cocoa>=9.2; platform_system == 'Darwin'  # macOS integration
 
 # User Interface
-PySide6                   # Modern UI framework
-qt-material              # Material Design for Qt
-
-# Network & Communication
-paho-mqtt                 # IoT communication
-httpx                     # Modern HTTP client
-elasticsearch            # Quick search capabilities
-
-# Billing
-stripe                    # Payment processing
-flask                     # Webhook handling
-pydantic                  # Data validation
-
-# Security
-cryptography             # Security operations
-python-magic            # File type validation
+PySide6>=6.6.0           # Modern UI framework
+qt-material>=2.14        # Material Design theme
 
 # Utilities
-watchdog                # File system events
-python-dotenv          # Environment management
-loguru                 # Smart logging
+loguru>=0.7.2           # Better logging
+python-dotenv>=1.0.0    # Environment management

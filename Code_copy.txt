@@ -1,0 +1,247 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import { Search, Settings, Bell, Command, GitBranch, Box, Beaker, Layout, Share2, ThumbsUp, Clock, Plus } from 'lucide-react'
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
+
+export default function Component() {
+  const [showMore, setShowMore] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [inputValue, setInputValue] = useState("")
+  const [isWriteMode, setIsWriteMode] = useState(true)
+  const [showGeminiFlash, setShowGeminiFlash] = useState(false)
+  const [checkedItems, setCheckedItems] = useState({
+    manageFolders: true,
+    openCommandPalette: false,
+    foldersSecurity: true,
+    triggerCommand: false
+  })
+
+  const pastWorkflows = [
+    { name: "Octavia: AI File Management System", time: "23m" },
+    { name: "Intelligent Voice Folder Manager", time: "17h" },
+    { name: "Octavia AI Assistant Design", time: "19h" },
+  ]
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowGeminiFlash(true)
+    }, 1500) // Show Gemini Flash after 1 second (slowed down)
+
+    return () => clearTimeout(timer)
+  }, [])
+
+  const handleCheckboxChange = (name: string) => {
+    setCheckedItems(prev => ({ ...prev, [name]: !prev[name] }))
+  }
+
+  const handleButtonClick = (action: string) => {
+    console.log(`Button clicked: ${action}`)
+  }
+
+  const handleModeToggle = () => {
+    setIsWriteMode(prev => !prev)
+  }
+
+  return (
+    <div className="h-screen flex flex-col bg-[#f0e6d2] text-gray-800">
+      {/* Top Bar */}
+      <div className="h-8 flex items-center px-4 bg-[#f0e6d2]">
+        <div className="flex space-x-1.5">
+          <div className="w-3 h-3 rounded-full bg-red-500" />
+          <div className="w-3 h-3 rounded-full bg-yellow-500" />
+          <div className="w-3 h-3 rounded-full bg-green-500" />
+        </div>
+        <div className="flex-1 flex justify-center">
+          <div className="flex items-center">
+            <Search className="w-3 h-3 text-gray-500 mr-1" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Octavia_v2"
+              className="text-xs bg-transparent border-none focus:outline-none"
+            />
+          </div>
+        </div>
+        <div className="flex items-center space-x-2">
+          {[Layout, Box, Command, Bell, Settings].map((Icon, index) => (
+            <Button
+              key={index}
+              variant="ghost"
+              size="icon"
+              className={`h-6 w-6 bg-[#e8dcc8] hover:bg-[#e0d4c0] ${Icon === Bell ? 'bg-amber-100 hover:bg-amber-200' : ''}`}
+              onClick={() => handleButtonClick(Icon.name)}
+            >
+              <Icon className="w-3 h-3" />
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 flex">
+        {/* Left Sidebar */}
+        <div className="w-12 bg-[#f0e6d2] border-r border-gray-200 flex flex-col items-center py-4 space-y-4">
+          {[Search, Share2, GitBranch, Box, Layout, Beaker, ThumbsUp].map((Icon, index) => (
+            <Button
+              key={index}
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 bg-[#e8dcc8] hover:bg-[#e0d4c0]"
+              onClick={() => handleButtonClick(Icon.name)}
+            >
+              <Icon className="w-3 h-3" />
+            </Button>
+          ))}
+        </div>
+
+        {/* Left Content */}
+        <div className="w-64 border-r border-gray-200 p-4 bg-[#f0e6d2]">
+          <h1 className="text-xl font-semibold mb-2">Octavia</h1>
+          <h2 className="text-base mb-4">Getting started with Octavia_v2</h2>
+
+          <div className="space-y-2 text-sm">
+            {[
+              { name: 'manageFolders', label: 'Manage Folders and Directories with Octavia', shortcut: 'L' },
+              { name: 'openCommandPalette', label: 'Open Command Palette', shortcut: 'P' },
+              { name: 'foldersSecurity', label: 'Folders Security with Octavia', shortcut: 'L' },
+              { name: 'triggerCommand', label: 'Trigger Command while Chatting', shortcut: 'I' }
+            ].map((item, index) => (
+              <div key={index} className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  checked={checkedItems[item.name as keyof typeof checkedItems]}
+                  onChange={() => handleCheckboxChange(item.name)}
+                  className="rounded bg-white"
+                />
+                <span>{item.label}</span>
+                <div className="ml-auto flex space-x-0.5">
+                  <kbd className="px-1 py-0.5 text-[10px] rounded bg-[#e8dcc8]">⌘</kbd>
+                  {item.name === 'openCommandPalette' && (
+                    <kbd className="px-1 py-0.5 text-[10px] rounded bg-[#e8dcc8]">⇧</kbd>
+                  )}
+                  <kbd className="px-1 py-0.5 text-[10px] rounded bg-[#e8dcc8]">{item.shortcut}</kbd>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Main Content Area */}
+        <div className="flex-1 p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2 text-sm">
+              <span>Octavia | {isWriteMode ? 'Write' : 'Chat'} mode</span>
+              <kbd className="px-1 py-0.5 text-[10px] rounded bg-[#e8dcc8]">⌘</kbd>
+            </div>
+            <div className="flex space-x-1">
+              {[Plus, Clock].map((Icon, index) => (
+                <Button
+                  key={index}
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 bg-[#e8dcc8] hover:bg-[#e0d4c0]"
+                  onClick={() => handleButtonClick(Icon.name)}
+                >
+                  <Icon className="w-3 h-3" />
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mb-6">
+            <div className="flex justify-center mb-4">
+              <div className="w-12 h-12 rounded-full bg-teal-100 flex items-center justify-center">
+                <div className="w-6 h-6 border-2 border-teal-500 rounded-full border-t-transparent animate-spin" style={{ animationDuration: '30s' }} />
+              </div>
+            </div>
+            <h2 className="text-lg font-semibold text-center mb-1">Write with Octavia</h2>
+            <p className="text-center text-sm text-gray-600 mb-1">
+              Kick off a new project or organize your files
+            </p>
+            <p className="text-center text-sm text-gray-600">
+              New to Octavia?{" "}
+              <a href="#" className="text-gray-600 underline" onClick={(e) => { e.preventDefault(); console.log("Try test workspace clicked") }}>
+                Try it out with a test workspace
+              </a>
+            </p>
+          </div>
+
+          <div className="bg-[#e8dcc8] rounded p-2 mb-0">
+            <Input
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder="Ask anything - use '@' to mention folder or directory blocks"
+              className="bg-transparent border-none focus:ring-0 text-sm"
+            />
+          </div>
+
+          <AnimatePresence>
+            {showGeminiFlash && (
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.7 }} // Slowed down animation
+                className="relative z-10"
+              >
+                <div 
+                  className="absolute left-0 bg-[#e8dcc8] p-2 shadow-md" 
+                  style={{ 
+                    clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 calc(100% - 8px), 95% calc(100% - 8px), 100% 100%, 0 100%)'
+                  }}
+                >
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">Gemini 1.5 Flash Intelligence</span>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="flex items-center justify-between text-sm mt-12 mb-2">
+            <Switch
+              checked={isWriteMode}
+              onCheckedChange={handleModeToggle}
+              className="bg-[#e8dcc8]"
+            />
+            <span>{isWriteMode ? 'Write mode' : 'Chat mode'}</span>
+          </div>
+
+          <div className="space-y-2 text-sm">
+            <h3 className="font-medium text-gray-600">Past workflows</h3>
+            {pastWorkflows.map((workflow, index) => (
+              <div key={index} className="flex justify-between items-center p-2 hover:bg-[#e8dcc8] rounded cursor-pointer" onClick={() => console.log(`Clicked workflow: ${workflow.name}`)}>
+                <span>{workflow.name}</span>
+                <span className="text-gray-500">{workflow.time}</span>
+              </div>
+            ))}
+            <Button
+              variant="ghost"
+              className="w-full text-gray-500 text-sm justify-start px-2"
+              onClick={() => setShowMore(!showMore)}
+            >
+              {showMore ? "Show less" : "Show 21 more..."}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Bar */}
+      <div className="h-8 flex items-center justify-between px-4 bg-[#f0e6d2] border-t border-gray-200 text-xs">
+        <div className="flex items-center space-x-2">
+          <span>0 △ 0</span>
+          <span>0</span>
+        </div>
+        <div className="flex items-center space-x-2 cursor-pointer" onClick={() => console.log("Octavia Settings clicked")}>
+          <span>Octavia Settings</span>
+          <Bell className="w-3 h-3" />
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -22,4 +22,4 @@ if not os.getenv("GOOGLE_CLOUD_LOCATION"):
 from interface.main_window import main
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
