@@ -24,15 +24,24 @@ class MainWindow(QMainWindow):
         
         # Setup main layout
         main_widget = QWidget()
+        main_widget.setObjectName("mainWidget")
         main_layout = QHBoxLayout(main_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
         
+        # Create left sidebar container with background
+        left_container = QWidget()
+        left_container.setObjectName("leftContainer")
+        left_container.setStyleSheet("QWidget#leftContainer { background-color: #e8dcc8; border-top-right-radius: 10px; border-bottom-right-radius: 10px; }")
+        left_layout = QHBoxLayout(left_container)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(0)
+        
         # Create left sidebar
         self.left_panel = LeftPanel()
-        self.left_panel.workspace_selected.connect(self._handle_workspace_selected)
         self.left_panel.api_key_inserted.connect(self._handle_api_key)
-        main_layout.addWidget(self.left_panel)
+        left_layout.addWidget(self.left_panel)
+        main_layout.addWidget(left_container)
         
         # Create main content area
         self.right_panel = self._setup_main_content()
@@ -43,9 +52,6 @@ class MainWindow(QMainWindow):
         # Initialize with text input disabled
         self.text_input.setEnabled(False)
         self.text_input.setPlaceholderText("Enter activation key to start...")
-
-        # Add test workspaces
-        self._add_test_workspaces()
 
     def _setup_main_content(self):
         """Setup the main content area with welcome message and input"""
@@ -92,16 +98,6 @@ class MainWindow(QMainWindow):
     def _handle_message(self, message: str):
         """Handle messages sent from the text input"""
         print(f"Message received: {message}")  # For now, just print the message
-
-    def _handle_workspace_selected(self, workspace: str):
-        """Handle workspace selection"""
-        print(f"Workspace selected: {workspace}")
-        self.state.current_workspace = workspace
-        
-    def _add_test_workspaces(self):
-        """Add some test workspaces for development"""
-        # No test workspaces for now
-        pass
 
 
 def main():

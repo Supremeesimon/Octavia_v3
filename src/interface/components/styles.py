@@ -9,49 +9,17 @@ def get_global_styles():
             font-family: ".AppleSystemUIFont";
             color: #4a4a4a;
         }
-        QWidget#leftPanel {
-            background-color: #e8dcc8;  /* Same as text input */
-            border-top-right-radius: 10px;
-            border-bottom-right-radius: 10px;
-        }
+        /* Remove leftPanel style since we're handling it in the container */
         QLabel#sidebarHeader {
-            font-size: 16px;
+            background-color: transparent;  /* Make background transparent */
+            font-size: 18px;
             font-weight: bold;
-            color: #4a4a4a;
+            color: #2a2a2a;  /* Even darker for better contrast */
             padding: 0;
+            margin-bottom: 12px;  /* More spacing below */
+            letter-spacing: 0.5px;  /* Slightly spread out letters */
         }
-        QPushButton#workspaceButton {
-            background-color: transparent;
-            border: none;
-            border-radius: 6px;
-            padding: 8px 12px;
-            text-align: left;
-            font-size: 14px;
-            color: #4a4a4a;
-        }
-        QPushButton#workspaceButton:hover {
-            background-color: #d8cbb8;
-        }
-        QPushButton#workspaceButton:pressed {
-            background-color: #c8bba8;
-        }
-        QPushButton#workspaceButton[selected=true] {
-            background-color: #d8cbb8;
-            font-weight: bold;
-        }
-        QPushButton#addWorkspaceButton {
-            background-color: transparent;
-            border: 2px dashed #a8a8a8;
-            border-radius: 6px;
-            padding: 8px 12px;
-            color: #666666;
-            font-size: 14px;
-        }
-        QPushButton#addWorkspaceButton:hover {
-            background-color: #d8cbb8;
-            border-color: #666666;
-            color: #4a4a4a;
-        }
+        /* Remove workspace button styles */
         QScrollArea#workspaceArea {
             background: transparent;
             border: none;
