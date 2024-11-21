@@ -49,12 +49,31 @@ class MainWindow(QMainWindow):
         self.chat_display.setReadOnly(True)
         self.chat_display.setStyleSheet("""
             QTextEdit {
-                background-color: #1E1E1E;
-                color: #FFFFFF;
+                background-color: #F8EFD8;
+                color: #4a4a4a;
                 border: none;
-                font-family: 'Menlo', monospace;
+                font-family: '.AppleSystemUIFont';
                 font-size: 14px;
-                padding: 10px;
+                padding: 5px 15px;
+                margin: 0;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background-color: transparent;
+                width: 8px;
+                margin: 0;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(74, 74, 74, 0.2);
+                min-height: 20px;
+                border-radius: 4px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0;
+                background: none;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
             }
         """)
         
@@ -108,14 +127,14 @@ class MainWindow(QMainWindow):
         right_panel = QWidget()
         layout = QVBoxLayout(right_panel)
         layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(24)
+        layout.setSpacing(8)  # Reduced spacing between elements
         
         # Add welcome section at the top
         self.welcome = WelcomeSection()
         layout.addWidget(self.welcome)
         
-        # Add chat display in the middle
-        layout.addWidget(self.chat_display)
+        # Add chat display in the middle with stretch
+        layout.addWidget(self.chat_display, 1)  # Added stretch factor
         
         # Add text input at the bottom
         self.text_input = TextInput()
@@ -144,44 +163,30 @@ class MainWindow(QMainWindow):
 
     def _handle_message(self, message: str):
         """Handle incoming message from text input."""
-        print(f"Handling message: {message}")
-        self.loop.create_task(self._process_message(message))
+        # Add user message with right alignment
+        user_message = f'<div style="text-align: right; margin: 8px 0;"><span style="background-color: #e8dcc8; padding: 8px 12px; border-radius: 15px; display: inline-block; max-width: 80%;">{message}</span></div>'
+        self.chat_display.append(user_message)
+        
+        # Process message asynchronously
+        asyncio.create_task(self._process_message(message))
 
     async def _process_message(self, message: str):
         """Process a message asynchronously"""
+        print(f"\nProcessing message: {message}")
         try:
-            print(f"\nProcessing message: {message}")
-            
-            if not self.brain:
-                print("Error: Brain not initialized!")
-                return
-            
-            # Display user message
-            self.chat_display.append(f"\nYou: {message}")
-            
-            print("Sending message to Gemini...")
-            response = await self.brain.think(
-                message=message,
-                context={},  # Simplified context for now
-                history=[]
-            )
+            # Get response from brain
+            response = await self.brain.process_message(message)
             print(f"Received response from Gemini: {response}")
             
-            # Display Octavia's response
-            self.chat_display.append(f"\nOctavia: {response}")
-            self.chat_display.verticalScrollBar().setValue(
-                self.chat_display.verticalScrollBar().maximum()
-            )
+            # Add Octavia's response with left alignment
+            octavia_message = f'<div style="text-align: left; margin: 8px 0;"><span style="background-color: #d4c3a3; padding: 8px 12px; border-radius: 15px; display: inline-block; max-width: 80%;">{response}</span></div>'
+            self.chat_display.append(octavia_message)
             
-        except Exception as e:
-            print(f"Error processing message: {str(e)}")
-            import traceback
-            print(traceback.format_exc())
-            self.chat_display.append(f"\nError: {str(e)}")
-            
-        finally:
             print("Message processing complete")
-            QTimer.singleShot(0, self.text_input.message_processed)
+        except Exception as e:
+            print(f"Error processing message: {e}")
+            error_message = f'<div style="text-align: left; margin: 8px 0; color: #ff4444;">Error: {str(e)}</div>'
+            self.chat_display.append(error_message)
 
 
 def main():

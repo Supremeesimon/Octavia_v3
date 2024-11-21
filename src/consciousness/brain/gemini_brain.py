@@ -98,6 +98,29 @@ class GeminiBrain:
             print(traceback.format_exc())
             return f"I encountered an error: {str(e)}"
 
+    async def process_message(self, message: str) -> str:
+        """Process a message and return the response"""
+        print("\nGemini Brain processing message:", message)
+        try:
+            print("Making API call to Gemini...")
+            response = await self.model.generate_content_async(
+                contents=message,
+                generation_config=self.generation_config,
+                safety_settings=self.safety_settings,
+            )
+            print("Raw response from Gemini:", response)
+            
+            if not response or not response.candidates:
+                raise Exception("No response received from Gemini")
+            
+            final_response = response.text
+            print("Final response text:", final_response)
+            return final_response
+            
+        except Exception as e:
+            print(f"Error in Gemini Brain: {str(e)}")
+            raise
+
     def _format_context(self, context: Dict) -> str:
         """Format context for the model"""
         try:
