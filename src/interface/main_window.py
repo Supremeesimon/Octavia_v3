@@ -32,6 +32,7 @@ class MainWindow(QMainWindow):
         # Create left sidebar container with background
         left_container = QWidget()
         left_container.setObjectName("leftContainer")
+        left_container.setFixedWidth(300)
         left_container.setStyleSheet("QWidget#leftContainer { background-color: #e8dcc8; border-top-right-radius: 10px; border-bottom-right-radius: 10px; }")
         left_layout = QHBoxLayout(left_container)
         left_layout.setContentsMargins(0, 0, 0, 0)
