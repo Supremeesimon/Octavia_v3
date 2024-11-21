@@ -56,6 +56,7 @@ class TextInput(QWidget):
         self.action_mode = True
         self.setup_ui()
         self.setup_connections()
+        self._enabled = True
 
     def setup_ui(self):
         self.setObjectName("inputGroup")
@@ -87,10 +88,10 @@ class TextInput(QWidget):
         # Right side controls
         right_container = QWidget()
         right_container.setObjectName("rightContainer")
-        right_container.setFixedWidth(220)  
+        right_container.setFixedWidth(300)  
         right_layout = QHBoxLayout(right_container)
         right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(8)
+        right_layout.setSpacing(12)  
 
         # Attachment button
         self.attach_button = QPushButton("📎")
@@ -100,70 +101,80 @@ class TextInput(QWidget):
         right_layout.addWidget(self.attach_button)
 
         # Send button
-        self.send_button = QPushButton("→")
+        self.send_button = QPushButton("→")  
         self.send_button.setObjectName("sendButton")
-        self.send_button.setFixedSize(32, 32)
+        self.send_button.setFixedSize(32, 32)  
         self.send_button.setToolTip("Send message")
         right_layout.addWidget(self.send_button)
 
-        # Mode toggle container with labels
+        # Mode toggle with labels
         mode_container = QWidget()
         mode_container.setObjectName("modeContainer")
+        mode_container.setFixedWidth(200)  
         mode_layout = QHBoxLayout(mode_container)
         mode_layout.setContentsMargins(0, 0, 0, 0)
-        mode_layout.setSpacing(4)
+        mode_layout.setSpacing(8)  
 
         # Action mode label
-        self.action_label = QLabel("Action")
+        self.action_label = QLabel("Action mode")
         self.action_label.setObjectName("modeLabel")
+        self.action_label.setFixedWidth(75)  
         mode_layout.addWidget(self.action_label)
 
-        # Custom toggle switch
+        # Toggle switch
         self.mode_toggle = ToggleSwitch()
-        self.mode_toggle.setObjectName("modeToggle")
         mode_layout.addWidget(self.mode_toggle)
 
         # Chat mode label
-        self.chat_label = QLabel("Chat")
+        self.chat_label = QLabel("Chat mode")
         self.chat_label.setObjectName("modeLabel")
+        self.chat_label.setFixedWidth(75)  
         mode_layout.addWidget(self.chat_label)
 
         right_layout.addWidget(mode_container)
+
         content_layout.addWidget(right_container)
-        
-        # Add the content widget to the main layout
         main_layout.addWidget(content_widget)
 
     def setup_connections(self):
-        self.text_input.textChanged.connect(self._adjust_text_input_height)
-        self.send_button.clicked.connect(self._on_send)
-        self.mode_toggle.toggled.connect(self._on_mode_changed)
+        self.send_button.clicked.connect(self._send_message)
+        self.text_input.textChanged.connect(self._adjust_height)
+        self.mode_toggle.toggled.connect(self._handle_mode_toggle)
 
-    def _adjust_text_input_height(self):
-        doc_height = self.text_input.document().size().height()
-        margins = self.text_input.contentsMargins()
-        padding = 12
-        
-        new_height = doc_height + margins.top() + margins.bottom() + padding
-        new_height = max(36, min(new_height, 200))  
-        
-        if new_height > 36:
-            self.text_input.setFixedHeight(int(new_height))
-
-    def _on_mode_changed(self, is_chat_mode):
-        self.action_mode = not is_chat_mode
-        if self.action_mode:
-            self.text_input.setPlaceholderText("Ask anything - use '@' to mention folder or file")
-        else:
-            self.text_input.setPlaceholderText("Chat with Octavia (no actions will be taken)")
-        self.mode_changed.emit(self.action_mode)
-
-    def _on_send(self):
+    def _send_message(self):
+        if not self._enabled:
+            return
         message = self.text_input.toPlainText().strip()
         if message:
             self.message_sent.emit(message)
             self.text_input.clear()
-            self.text_input.setFixedHeight(36)
-            
-    def is_action_mode(self):
-        return self.action_mode
+            self._reset_height()
+
+    def _adjust_height(self):
+        doc_height = self.text_input.document().size().height()
+        if doc_height <= 36:  # Single line height
+            new_height = 36
+        else:
+            new_height = min(doc_height + 12, 120)  # Max height of 120px
+        self.text_input.setFixedHeight(int(new_height))
+
+    def _reset_height(self):
+        self.text_input.setFixedHeight(36)
+
+    def _handle_mode_toggle(self, checked):
+        self.action_mode = not checked
+        self.mode_changed.emit(self.action_mode)
+        self.text_input.setPlaceholderText(
+            "Tell Octavia what to do..." if self.action_mode else "Chat with Octavia..."
+        )
+
+    def setEnabled(self, enabled):
+        self._enabled = enabled
+        super().setEnabled(enabled)
+        self.text_input.setEnabled(enabled)
+        self.send_button.setEnabled(enabled)
+        self.attach_button.setEnabled(enabled)
+        self.mode_toggle.setEnabled(enabled)
+
+    def setPlaceholderText(self, text):
+        self.text_input.setPlaceholderText(text)

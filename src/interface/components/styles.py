@@ -10,7 +10,7 @@ def get_global_styles():
             color: #4a4a4a;
         }
         QWidget#leftPanel {
-            background-color: #e8dcc8;
+            background-color: #e8dcc8;  /* Same as text input */
             border-top-right-radius: 10px;
             border-bottom-right-radius: 10px;
         }
@@ -145,5 +145,40 @@ def get_global_styles():
         }
         QPushButton#attachButton {
             font-size: 16px;
+        }
+        QLineEdit#apiKeyInput {
+            background-color: transparent;
+            border: 2px dashed #a8a8a8;
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: #666666;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+        QLineEdit#apiKeyInput:focus {
+            border-color: #666666;
+            color: #4a4a4a;
+        }
+        QPushButton#insertKeyButton {
+            background-color: #e8dcc8;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: #666666;
+            font-size: 12px;
+            text-align: center;
+        }
+        QPushButton#insertKeyButton:hover {
+            background-color: #d8cbb8;
+            color: #4a4a4a;
+        }
+        QPushButton#insertKeyButton:pressed {
+            background-color: #c8bba8;
+        }
+        QLabel#apiKeyStatus {
+            color: #666666;
+            font-size: 11px;
+            padding: 0 2px;
+            qproperty-alignment: AlignRight;
         }
     """

@@ -31,15 +31,19 @@ class MainWindow(QMainWindow):
         # Create left sidebar
         self.left_panel = LeftPanel()
         self.left_panel.workspace_selected.connect(self._handle_workspace_selected)
-        self.left_panel.project_selected.connect(self._handle_project_selected)
+        self.left_panel.api_key_inserted.connect(self._handle_api_key)
         main_layout.addWidget(self.left_panel)
         
         # Create main content area
-        right_panel = self._setup_main_content()
-        main_layout.addWidget(right_panel)
+        self.right_panel = self._setup_main_content()
+        main_layout.addWidget(self.right_panel)
         
         self.setCentralWidget(main_widget)
         
+        # Initialize with text input disabled
+        self.text_input.setEnabled(False)
+        self.text_input.setPlaceholderText("Enter activation key to start...")
+
         # Add test workspaces
         self._add_test_workspaces()
 
@@ -62,9 +66,9 @@ class MainWindow(QMainWindow):
         content_layout.addWidget(welcome)
         
         # Text input
-        text_input = TextInput()
-        text_input.message_sent.connect(self._handle_message)
-        content_layout.addWidget(text_input)
+        self.text_input = TextInput()
+        self.text_input.message_sent.connect(self._handle_message)
+        content_layout.addWidget(self.text_input)
         
         # Center the content container
         container_wrapper = QHBoxLayout()
@@ -77,6 +81,14 @@ class MainWindow(QMainWindow):
         
         return right_panel
 
+    def _handle_api_key(self, key: str):
+        """Handle API key insertion"""
+        # Here you would validate the key with Gemini
+        # For now, we'll just enable the text input
+        self.text_input.setEnabled(True)
+        self.text_input.setPlaceholderText("Message Octavia...")
+        self.state.api_key = key  # Store the key in state
+
     def _handle_message(self, message: str):
         """Handle messages sent from the text input"""
         print(f"Message received: {message}")  # For now, just print the message
@@ -85,17 +97,11 @@ class MainWindow(QMainWindow):
         """Handle workspace selection"""
         print(f"Workspace selected: {workspace}")
         self.state.current_workspace = workspace
-
-    def _handle_project_selected(self, project: str):
-        """Handle project selection"""
-        print(f"Project selected: {project}")
-        self.state.current_project = project
         
     def _add_test_workspaces(self):
         """Add some test workspaces for development"""
-        test_workspaces = ["Personal", "Work", "Projects"]
-        for workspace in test_workspaces:
-            self.left_panel.add_workspace(workspace)
+        # No test workspaces for now
+        pass
 
 
 def main():

@@ -3,14 +3,14 @@ Left panel component for Octavia
 """
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, 
-                             QLabel, QScrollArea, QFrame)
+                             QLabel, QScrollArea, QFrame, QLineEdit)
 from PySide6.QtCore import Qt, Signal
 
 class LeftPanel(QWidget):
-    """Left panel component containing workspace and project navigation"""
+    """Left panel component containing workspace navigation"""
     
     workspace_selected = Signal(str)  # Emitted when workspace is selected
-    project_selected = Signal(str)    # Emitted when project is selected
+    api_key_inserted = Signal(str)    # Emitted when API key is inserted
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -45,11 +45,37 @@ class LeftPanel(QWidget):
         workspace_area.setWidget(workspace_container)
         layout.addWidget(workspace_area)
         
-        # Add workspace button
-        add_workspace_btn = QPushButton("+ New Workspace")
-        add_workspace_btn.setObjectName("addWorkspaceButton")
-        layout.addWidget(add_workspace_btn)
+        # Add stretch to push API key section to bottom
+        layout.addStretch()
         
+        # API Key section
+        self.api_key_input = QLineEdit()
+        self.api_key_input.setObjectName("apiKeyInput")
+        self.api_key_input.setPlaceholderText("Enter activation key...")
+        self.api_key_input.setEchoMode(QLineEdit.Password)
+        layout.addWidget(self.api_key_input)
+        
+        self.insert_key_btn = QPushButton("Insert")
+        self.insert_key_btn.setObjectName("insertKeyButton")
+        self.insert_key_btn.clicked.connect(self._handle_key_insert)
+        layout.addWidget(self.insert_key_btn)
+        
+        self.api_status = QLabel("")
+        self.api_status.setObjectName("apiKeyStatus")
+        self.api_status.hide()
+        layout.addWidget(self.api_status)
+        
+    def _handle_key_insert(self):
+        """Handle API key insertion"""
+        key = self.api_key_input.text().strip()
+        if key:
+            self.api_key_inserted.emit(key)
+            self.api_key_input.clear()
+            self.api_key_input.setEnabled(False)
+            self.insert_key_btn.hide()
+            self.api_status.setText("✓ Activated")
+            self.api_status.show()
+            
     def add_workspace(self, name: str):
         """Add a workspace button to the panel"""
         workspace_btn = QPushButton(name)
