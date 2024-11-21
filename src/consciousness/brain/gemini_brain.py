@@ -1,66 +1,102 @@
 """
-Octavia's Gemini-powered Brain
+Octavia's Gemini-powered Brain using direct API access
 """
 
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List
+import google.generativeai as genai
 from loguru import logger
-import vertexai
-from vertexai.preview.generative_models import GenerativeModel, ChatSession
-from vertexai.preview.language_models import ChatModel
+from dotenv import load_dotenv
 
 class GeminiBrain:
-    """Brain powered by Google's Gemini Flash API"""
+    """Brain powered by Google's Gemini API"""
     
-    def __init__(self):
-        """Initialize the Gemini brain"""
+    def __init__(self, api_key: str = None):
+        """Initialize the Gemini brain with an API key."""
         try:
-            # Initialize Vertex AI
-            project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
-            location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+            print("Initializing Gemini brain...")
             
-            if not project_id:
-                raise ValueError("GOOGLE_CLOUD_PROJECT environment variable not set")
+            # Load API key from environment if not provided
+            if not api_key:
+                load_dotenv()
+                api_key = os.getenv('GEMINI_API_KEY')
             
-            vertexai.init(project=project_id, location=location)
+            if not api_key:
+                print("Error: No API key provided!")
+                raise ValueError("API key is required. Set it in .env file or provide directly.")
             
-            # Initialize Gemini model
-            self.model = GenerativeModel("gemini-pro")
-            self.chat = self.model.start_chat()
-            logger.info("Successfully initialized Gemini brain")
+            print("Configuring Gemini API...")
+            genai.configure(api_key=api_key)
+            
+            # Initialize Gemini model - using gemini-pro for now until Flash is available
+            print("Creating Gemini model...")
+            self.model = genai.GenerativeModel('gemini-pro')
+            print("Successfully initialized Gemini brain")
             
         except Exception as e:
-            logger.error(f"Failed to initialize Gemini brain: {e}")
+            print(f"Error initializing Gemini brain: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
             raise
 
     async def think(self, message: str, context: Dict, history: List[Dict]) -> str:
-        """
-        Process a message with context and history to generate a response
-        
-        Args:
-            message: The user's message
-            context: Current system context and user preferences
-            history: Recent conversation history
-            
-        Returns:
-            Octavia's response
-        """
+        """Process a message with context and history to generate a response."""
         try:
-            # Format context and history for the model
-            formatted_context = self._format_context(context)
-            formatted_history = self._format_history(history)
-            
-            # Combine everything into a prompt
-            prompt = f"{formatted_context}\n\n{formatted_history}\nUser: {message}\nOctavia:"
+            print(f"\nGemini Brain processing message: {message}")
             
             # Get response from Gemini
-            response = self.chat.send_message(prompt)
+            print("Making API call to Gemini...")
             
-            return response.text
+            # Create chat
+            chat = self.model.start_chat()
+            
+            # Set Octavia context
+            octavia_context = """You are Octavia, a friendly and modern AI assistant created by SupremeAnalytics.
+            You run in a sleek desktop app and chat with users in a casual, natural way - no formal greetings 
+            or robotic language. You're powered by SupremeAnalytics' cutting-edge AI technology.
+
+            Your personality:
+            - Friendly and approachable, like chatting with a helpful friend
+            - Modern and casual - you use everyday language, emojis, and a conversational tone
+            - No formal greetings like "Greetings!" or overly formal language
+            - You're enthusiastic but not over-the-top
+            
+            When describing your capabilities, focus on what you can actually do in the desktop app:
+            - Having natural conversations
+            - Answering questions and providing information
+            - Understanding context and maintaining conversation flow
+            - Being a helpful AI companion
+
+            Never mention Gemini, Google, or capabilities you don't actually have (like setting reminders 
+            or accessing real-time data). Stay focused on being a great conversational AI partner."""
+            
+            # Send context and message
+            response = chat.send_message(f"{octavia_context}\n\nUser: {message}")
+            
+            if not response:
+                print("Error: Received empty response from Gemini")
+                return "I apologize, but I couldn't generate a response at this time."
+            
+            print(f"Raw response from Gemini: {response}")
+            text_response = response.text
+            
+            # Ensure response uses correct branding and style
+            text_response = text_response.replace("Gemini", "SupremeAnalytics")
+            text_response = text_response.replace("Google", "SupremeAnalytics")
+            text_response = text_response.replace("I am an AI", "I'm Octavia, an AI")
+            text_response = text_response.replace("I'm an AI", "I'm Octavia, an AI")
+            text_response = text_response.replace("Greetings", "Hi")
+            text_response = text_response.replace("Greetings!", "Hi!")
+            
+            print(f"Final response text: {text_response}")
+            
+            return text_response
             
         except Exception as e:
-            logger.error(f"Error in think: {e}")
-            return "I apologize, but I'm having trouble processing that right now. Could you try again?"
+            print(f"Error in Gemini brain: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
+            return f"I encountered an error: {str(e)}"
 
     def _format_context(self, context: Dict) -> str:
         """Format context for the model"""

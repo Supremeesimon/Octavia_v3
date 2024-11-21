@@ -4,20 +4,59 @@ Octavia's Main Window Interface
 
 import sys
 import os
-from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QApplication
-from PySide6.QtCore import Qt
+import asyncio
+from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QApplication, QTextEdit
+from PySide6.QtCore import Qt, QTimer
+import contextlib
+from PySide6.QtCore import QEventLoop
+from loguru import logger
+
+# Configure loguru to write to a file
+log_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "logs", "octavia.log")
+logger.add(log_path, rotation="500 MB", level="DEBUG", backtrace=True, diagnose=True)
 
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from interface.components import WelcomeSection, TextInput, OctaviaState, get_global_styles, LeftPanel
+from interface.components import WelcomeSection, TextInput, get_global_styles, LeftPanel
+from consciousness.brain.gemini_brain import GeminiBrain
+
+class OctaviaState:
+    """State management for Octavia"""
+    def __init__(self):
+        self.current_workspace = None
+        self.active_file = None
+        self.current_project = None
 
 class MainWindow(QMainWindow):
     """Main window for Octavia"""
     def __init__(self):
         super().__init__()
-        self.state = OctaviaState()
+        
+        # Create and store event loop
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        
+        # Set up UI
         self.setWindowTitle("Octavia")
-        self.setMinimumSize(1200, 800)
+        self.resize(1200, 800)
+        
+        # Initialize state
+        self.state = OctaviaState()
+        self.brain = None
+        
+        # Create chat display
+        self.chat_display = QTextEdit()
+        self.chat_display.setReadOnly(True)
+        self.chat_display.setStyleSheet("""
+            QTextEdit {
+                background-color: #1E1E1E;
+                color: #FFFFFF;
+                border: none;
+                font-family: 'Menlo', monospace;
+                font-size: 14px;
+                padding: 10px;
+            }
+        """)
         
         # Apply styles from external stylesheet
         self.setStyleSheet(get_global_styles())
@@ -53,60 +92,108 @@ class MainWindow(QMainWindow):
         # Initialize with text input disabled
         self.text_input.setEnabled(False)
         self.text_input.setPlaceholderText("Enter activation key to start...")
-
+        
+        # Create timer for async operations
+        self.async_timer = QTimer()
+        self.async_timer.timeout.connect(self._process_async)
+        self.async_timer.start(10)  # Run every 10ms
+    
+    def _process_async(self):
+        """Process pending async operations"""
+        self.loop.stop()
+        self.loop.run_forever()
+    
     def _setup_main_content(self):
         """Setup the main content area with welcome message and input"""
         right_panel = QWidget()
         layout = QVBoxLayout(right_panel)
         layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(20)
-
-        # Container for both welcome and input
-        content_container = QWidget()
-        content_layout = QVBoxLayout(content_container)
-        content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(20)
-
-        # Welcome section
-        welcome = WelcomeSection()
-        welcome.setFixedWidth(850)  # Match text input width
-        content_layout.addWidget(welcome)
+        layout.setSpacing(24)
         
-        # Text input
+        # Add welcome section at the top
+        self.welcome = WelcomeSection()
+        layout.addWidget(self.welcome)
+        
+        # Add chat display in the middle
+        layout.addWidget(self.chat_display)
+        
+        # Add text input at the bottom
         self.text_input = TextInput()
         self.text_input.message_sent.connect(self._handle_message)
-        content_layout.addWidget(self.text_input)
-        
-        # Center the content container
-        container_wrapper = QHBoxLayout()
-        container_wrapper.addStretch()
-        container_wrapper.addWidget(content_container)
-        container_wrapper.addStretch()
-        
-        layout.addLayout(container_wrapper)
-        layout.addStretch()
+        layout.addWidget(self.text_input)
         
         return right_panel
 
     def _handle_api_key(self, key: str):
         """Handle API key insertion"""
-        # Here you would validate the key with Gemini
-        # For now, we'll just enable the text input
-        self.text_input.setEnabled(True)
-        self.text_input.setPlaceholderText("Message Octavia...")
-        self.state.api_key = key  # Store the key in state
+        try:
+            # Initialize Gemini brain with the API key
+            self.brain = GeminiBrain(api_key=key)
+            
+            # Enable text input and update UI
+            self.text_input.setEnabled(True)
+            self.text_input.setPlaceholderText("Message Octavia...")
+            self.state.api_key = key  # Store the key in state
+            
+        except Exception as e:
+            # If initialization fails, show error in API status
+            self.left_panel.api_status.setText("❌ Invalid key")
+            self.left_panel.api_status.show()
+            self.left_panel.api_key_input.setEnabled(True)
+            self.left_panel.insert_key_btn.show()
 
     def _handle_message(self, message: str):
-        """Handle messages sent from the text input"""
-        print(f"Message received: {message}")  # For now, just print the message
+        """Handle incoming message from text input."""
+        print(f"Handling message: {message}")
+        self.loop.create_task(self._process_message(message))
+
+    async def _process_message(self, message: str):
+        """Process a message asynchronously"""
+        try:
+            print(f"\nProcessing message: {message}")
+            
+            if not self.brain:
+                print("Error: Brain not initialized!")
+                return
+            
+            # Display user message
+            self.chat_display.append(f"\nYou: {message}")
+            
+            print("Sending message to Gemini...")
+            response = await self.brain.think(
+                message=message,
+                context={},  # Simplified context for now
+                history=[]
+            )
+            print(f"Received response from Gemini: {response}")
+            
+            # Display Octavia's response
+            self.chat_display.append(f"\nOctavia: {response}")
+            self.chat_display.verticalScrollBar().setValue(
+                self.chat_display.verticalScrollBar().maximum()
+            )
+            
+        except Exception as e:
+            print(f"Error processing message: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
+            self.chat_display.append(f"\nError: {str(e)}")
+            
+        finally:
+            print("Message processing complete")
+            QTimer.singleShot(0, self.text_input.message_processed)
 
 
 def main():
     app = QApplication(sys.argv)
+    
     window = MainWindow()
     window.show()
-    sys.exit(app.exec())
-
+    
+    try:
+        sys.exit(app.exec())
+    finally:
+        window.loop.close()
 
 if __name__ == "__main__":
     main()

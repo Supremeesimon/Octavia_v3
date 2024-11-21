@@ -3,10 +3,49 @@ Text input component for Octavia
 """
 
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QTextEdit, QPushButton,
-                              QVBoxLayout, QLabel)
-from PySide6.QtCore import Signal, Qt, QTimer
-from .toggle_switch import ToggleSwitch
+                             QLabel, QVBoxLayout)
+from PySide6.QtCore import Signal, Qt
+from PySide6.QtGui import QPainter, QColor, QBrush
 
+class ToggleSwitch(QWidget):
+    toggled = Signal(bool)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(36, 20)  
+        self._is_checked = False
+        self.animation_value = 0
+        self.setToolTip("Switch between Action and Chat modes")
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        # Draw track 
+        track_color = QColor("#4a4a4a") if self._is_checked else QColor("#666666")
+        painter.setBrush(QBrush(track_color))
+        painter.setPen(Qt.NoPen)
+        painter.drawRoundedRect(0, 4, 36, 12, 6, 6)  
+
+        # Draw handle 
+        handle_x = 18 if self._is_checked else 2
+        painter.setBrush(QBrush(QColor("#ffffff")))
+        painter.drawEllipse(handle_x, 1, 18, 18)  
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._is_checked = not self._is_checked
+            self.update()
+            self.toggled.emit(self._is_checked)
+
+    def isChecked(self):
+        return self._is_checked
+
+    def setChecked(self, checked):
+        if self._is_checked != checked:
+            self._is_checked = checked
+            self.update()
+            self.toggled.emit(self._is_checked)
 
 class TextInput(QWidget):
     message_sent = Signal(str)
@@ -18,7 +57,6 @@ class TextInput(QWidget):
         self.setup_ui()
         self.setup_connections()
         self._enabled = True
-        self._is_sending = False
 
     def setup_ui(self):
         self.setObjectName("inputGroup")
@@ -69,27 +107,18 @@ class TextInput(QWidget):
         self.send_button.setToolTip("Send message")
         right_layout.addWidget(self.send_button)
 
-        # Loading dots for send button (hidden by default)
-        self._loading_timer = QTimer()
-        self._loading_timer.setInterval(500)  # Update every 500ms
-        self._loading_timer.timeout.connect(self._update_loading_dots)
-        self._loading_dots = 0
-
-        input_layout.addWidget(self.right_container)
-        main_layout.addWidget(self.input_container)
-
-        # Mode toggle below input
+        # Mode toggle with labels
         self.mode_container = QWidget()
         self.mode_container.setObjectName("modeContainer")
-        self.mode_container.setFixedWidth(190)  
+        self.mode_container.setFixedWidth(120)  
         mode_layout = QHBoxLayout(self.mode_container)
         mode_layout.setContentsMargins(0, 0, 0, 0)
         mode_layout.setSpacing(8)  
 
         # Action mode label
-        self.action_label = QLabel("Action mode")
+        self.action_label = QLabel("Action")
         self.action_label.setObjectName("modeLabel")
-        self.action_label.setFixedWidth(75)  
+        self.action_label.setFixedWidth(40)  
         mode_layout.addWidget(self.action_label)
 
         # Toggle switch
@@ -97,12 +126,15 @@ class TextInput(QWidget):
         mode_layout.addWidget(self.mode_toggle)
 
         # Chat mode label
-        self.chat_label = QLabel("Chat mode")
+        self.chat_label = QLabel("Chat")
         self.chat_label.setObjectName("modeLabel")
-        self.chat_label.setFixedWidth(75)  
+        self.chat_label.setFixedWidth(40)  
         mode_layout.addWidget(self.chat_label)
 
-        # Add mode toggle below input with right alignment
+
+        input_layout.addWidget(right_container)
+
+        # Mode toggle below input
         mode_wrapper = QHBoxLayout()
         mode_wrapper.addStretch()
         mode_wrapper.addWidget(self.mode_container)
@@ -115,62 +147,38 @@ class TextInput(QWidget):
         self.mode_toggle.toggled.connect(self._handle_mode_toggle)
 
     def _send_message(self):
-        if not self._enabled or self._is_sending:
+        if not self._enabled:
             return
-            
         message = self.text_input.toPlainText().strip()
         if message:
-            # Start loading state
-            self._is_sending = True
-            self.text_input.setEnabled(False)
-            self.send_button.setText("•")
-            self._loading_timer.start()
-            
-            # Emit message
             self.message_sent.emit(message)
-            
-            # Clear input
             self.text_input.clear()
             self._reset_height()
 
-    def _update_loading_dots(self):
-        """Update loading animation dots"""
-        if not self._is_sending:
-            self._loading_timer.stop()
-            self.send_button.setText("→")
-            return
-            
-        dots = "." * (self._loading_dots + 1)
-        self.send_button.setText(dots)
-        self._loading_dots = (self._loading_dots + 1) % 3
-
-    def message_processed(self):
-        """Call this when the message has been processed"""
-        self._is_sending = False
-        self.text_input.setEnabled(True)
-        self._loading_timer.stop()
-        self.send_button.setText("→")
-
     def _adjust_height(self):
-        document_height = self.text_input.document().size().height()
-        if document_height <= 36:  # Single line height
-            self.text_input.setFixedHeight(36)
+        doc_height = self.text_input.document().size().height()
+        if doc_height <= 36:  # Single line height
+            new_height = 36
         else:
-            max_height = min(document_height + 12, 120)  # Add padding, cap at 120px
-            self.text_input.setFixedHeight(int(max_height))
+            new_height = min(doc_height + 12, 120)  # Max height of 120px
+        self.text_input.setFixedHeight(int(new_height))
 
     def _reset_height(self):
         self.text_input.setFixedHeight(36)
 
     def _handle_mode_toggle(self, checked):
         self.action_mode = not checked
-        self.mode_changed.emit(checked)
+        self.mode_changed.emit(self.action_mode)
+        self.text_input.setPlaceholderText(
+            "Tell Octavia what to do..." if self.action_mode else "Chat with Octavia..."
+        )
 
     def setEnabled(self, enabled):
         self._enabled = enabled
+        super().setEnabled(enabled)
         self.text_input.setEnabled(enabled)
-        self.attach_button.setEnabled(enabled)
         self.send_button.setEnabled(enabled)
+        self.attach_button.setEnabled(enabled)
         self.mode_toggle.setEnabled(enabled)
 
     def setPlaceholderText(self, text):
