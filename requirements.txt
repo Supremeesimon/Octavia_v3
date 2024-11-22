@@ -12,3 +12,4 @@ qt-material>=2.14        # Material Design theme
 # Utilities
 loguru>=0.7.2           # Better logging
 python-dotenv>=1.0.0    # Environment management
+qasync>=0.24.0           # Asyncio support with Qt

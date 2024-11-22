@@ -5,6 +5,7 @@ Octavia v3 Launcher
 
 import os
 import sys
+import asyncio
 from pathlib import Path
 
 # Add src to Python path
@@ -22,4 +23,4 @@ if not os.getenv("GOOGLE_CLOUD_LOCATION"):
 from interface.main_window import main
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(asyncio.run(main()))

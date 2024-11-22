@@ -4,7 +4,7 @@ Text input component for Octavia
 
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QTextEdit, QPushButton,
                               QVBoxLayout, QLabel)
-from PySide6.QtCore import Signal, Qt, QTimer
+from PySide6.QtCore import Signal, Qt, QTimer, QEvent
 from .toggle_switch import ToggleSwitch
 
 
@@ -22,7 +22,8 @@ class TextInput(QWidget):
 
     def setup_ui(self):
         self.setObjectName("inputGroup")
-        self.setFixedWidth(850)  
+        # Remove fixed width to allow stretching
+        self.setMinimumWidth(850)  
         self.setMinimumHeight(48)
         
         # Main vertical layout to control expansion direction
@@ -113,6 +114,21 @@ class TextInput(QWidget):
         self.send_button.clicked.connect(self._send_message)
         self.text_input.textChanged.connect(self._adjust_height)
         self.mode_toggle.toggled.connect(self._handle_mode_toggle)
+        
+        # Handle key events in text input
+        self.text_input.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        """Handle key events in text input"""
+        if obj == self.text_input and event.type() == QEvent.KeyPress:
+            if event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
+                # Send message on Enter without Shift
+                if not event.modifiers() & Qt.ShiftModifier:
+                    self._send_message()
+                    return True
+                # Allow Shift+Enter for new line
+                return False
+        return super().eventFilter(obj, event)
 
     def _send_message(self):
         if not self._enabled or self._is_sending:
@@ -129,9 +145,18 @@ class TextInput(QWidget):
             # Emit message
             self.message_sent.emit(message)
             
-            # Clear input
+            # Clear input and reset height
             self.text_input.clear()
             self._reset_height()
+
+    def message_processed(self):
+        """Call this when the message has been processed"""
+        self._is_sending = False
+        self.text_input.setEnabled(True)
+        self._loading_timer.stop()
+        self.send_button.setText("→")
+        # Set focus back to text input
+        self.text_input.setFocus()
 
     def _update_loading_dots(self):
         """Update loading animation dots"""
@@ -140,16 +165,9 @@ class TextInput(QWidget):
             self.send_button.setText("→")
             return
             
-        dots = "." * (self._loading_dots + 1)
-        self.send_button.setText(dots)
         self._loading_dots = (self._loading_dots + 1) % 3
-
-    def message_processed(self):
-        """Call this when the message has been processed"""
-        self._is_sending = False
-        self.text_input.setEnabled(True)
-        self._loading_timer.stop()
-        self.send_button.setText("→")
+        dots = "•" * (self._loading_dots + 1)
+        self.send_button.setText(dots)
 
     def _adjust_height(self):
         document_height = self.text_input.document().size().height()

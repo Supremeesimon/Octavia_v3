@@ -30,7 +30,33 @@ class GeminiBrain:
             
             # Initialize Gemini model - using gemini-pro for now until Flash is available
             print("Creating Gemini model...")
-            self.model = genai.GenerativeModel('gemini-pro')
+            self.model = genai.GenerativeModel(
+                model_name='gemini-pro',
+                generation_config={
+                    'temperature': 0.7,
+                    'top_p': 0.8,
+                    'top_k': 40,
+                    'max_output_tokens': 2048,
+                },
+                safety_settings=[
+                    {
+                        "category": "HARM_CATEGORY_HARASSMENT",
+                        "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+                    },
+                    {
+                        "category": "HARM_CATEGORY_HATE_SPEECH",
+                        "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+                    },
+                    {
+                        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                        "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+                    },
+                    {
+                        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                        "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+                    }
+                ]
+            )
             print("Successfully initialized Gemini brain")
             
         except Exception as e:
@@ -42,84 +68,68 @@ class GeminiBrain:
     async def think(self, message: str, context: Dict, history: List[Dict]) -> str:
         """Process a message with context and history to generate a response."""
         try:
-            print(f"\nGemini Brain processing message: {message}")
+            # Create chat with optimized settings for speed
+            model = genai.GenerativeModel(
+                model_name='gemini-pro',
+                generation_config={
+                    'temperature': 0.7,  # Lower temperature for faster responses
+                    'top_p': 0.1,  # Lower top_p for faster responses
+                    'top_k': 1,  # Lower top_k for faster responses
+                    'max_output_tokens': 1024,  # Reduced max tokens for speed
+                },
+                safety_settings=[
+                    {
+                        "category": "HARM_CATEGORY_HARASSMENT",
+                        "threshold": "BLOCK_ONLY_HIGH"
+                    },
+                    {
+                        "category": "HARM_CATEGORY_HATE_SPEECH",
+                        "threshold": "BLOCK_ONLY_HIGH"
+                    },
+                    {
+                        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                        "threshold": "BLOCK_ONLY_HIGH"
+                    },
+                    {
+                        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                        "threshold": "BLOCK_ONLY_HIGH"
+                    }
+                ]
+            )
             
-            # Get response from Gemini
-            print("Making API call to Gemini...")
+            chat = model.start_chat(history=[])
             
-            # Create chat
-            chat = self.model.start_chat()
+            # Prepare a more specific prompt for faster responses
+            prompt = f"""You are Octavia, a friendly and helpful AI assistant. Respond briefly and directly to: {message}"""
             
-            # Set Octavia context
-            octavia_context = """You are Octavia, a friendly and modern AI assistant created by SupremeAnalytics.
-            You run in a sleek desktop app and chat with users in a casual, natural way - no formal greetings 
-            or robotic language. You're powered by SupremeAnalytics' cutting-edge AI technology.
-
-            Your personality:
-            - Friendly and approachable, like chatting with a helpful friend
-            - Modern and casual - you use everyday language, emojis, and a conversational tone
-            - No formal greetings like "Greetings!" or overly formal language
-            - You're enthusiastic but not over-the-top
+            # Send message with optimized settings
+            response = await chat.send_message_async(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.7,
+                    candidate_count=1,
+                    max_output_tokens=1024,
+                    top_p=0.1,
+                    top_k=1,
+                )
+            )
             
-            When describing your capabilities, focus on what you can actually do in the desktop app:
-            - Having natural conversations
-            - Answering questions and providing information
-            - Understanding context and maintaining conversation flow
-            - Being a helpful AI companion
-
-            Never mention Gemini, Google, or capabilities you don't actually have (like setting reminders 
-            or accessing real-time data). Stay focused on being a great conversational AI partner."""
-            
-            # Send context and message
-            response = chat.send_message(f"{octavia_context}\n\nUser: {message}")
-            
-            if not response:
-                print("Error: Received empty response from Gemini")
-                return "I apologize, but I couldn't generate a response at this time."
-            
-            print(f"Raw response from Gemini: {response}")
-            text_response = response.text
-            
-            # Ensure response uses correct branding and style
-            text_response = text_response.replace("Gemini", "SupremeAnalytics")
-            text_response = text_response.replace("Google", "SupremeAnalytics")
-            text_response = text_response.replace("I am an AI", "I'm Octavia, an AI")
-            text_response = text_response.replace("I'm an AI", "I'm Octavia, an AI")
-            text_response = text_response.replace("Greetings", "Hi")
-            text_response = text_response.replace("Greetings!", "Hi!")
-            
-            print(f"Final response text: {text_response}")
-            
-            return text_response
+            if not response.text:
+                return "I apologize, but I wasn't able to generate a proper response. Could you please try rephrasing your message?"
+                
+            return response.text.strip()
             
         except Exception as e:
-            print(f"Error in Gemini brain: {str(e)}")
-            import traceback
-            print(traceback.format_exc())
-            return f"I encountered an error: {str(e)}"
+            error_msg = f"I apologize, but I encountered an error: {str(e)}"
+            print(f"Error in think: {error_msg}")
+            return error_msg
 
     async def process_message(self, message: str) -> str:
         """Process a message and return the response"""
-        print("\nGemini Brain processing message:", message)
         try:
-            print("Making API call to Gemini...")
-            response = await self.model.generate_content_async(
-                contents=message,
-                generation_config=self.generation_config,
-                safety_settings=self.safety_settings,
-            )
-            print("Raw response from Gemini:", response)
-            
-            if not response or not response.candidates:
-                raise Exception("No response received from Gemini")
-            
-            final_response = response.text
-            print("Final response text:", final_response)
-            return final_response
-            
+            return await self.think(message, {}, [])
         except Exception as e:
-            print(f"Error in Gemini Brain: {str(e)}")
-            raise
+            return f"I apologize, but something went wrong: {str(e)}"
 
     def _format_context(self, context: Dict) -> str:
         """Format context for the model"""

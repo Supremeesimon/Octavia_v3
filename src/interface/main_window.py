@@ -5,8 +5,10 @@ Octavia's Main Window Interface
 import sys
 import os
 import asyncio
+import qasync
 from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QApplication, QTextEdit
 from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QTextCursor
 import contextlib
 from PySide6.QtCore import QEventLoop
 from loguru import logger
@@ -32,10 +34,6 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         
-        # Create and store event loop
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
-        
         # Set up UI
         self.setWindowTitle("Octavia")
         self.resize(1200, 800)
@@ -43,6 +41,13 @@ class MainWindow(QMainWindow):
         # Initialize state
         self.state = OctaviaState()
         self.brain = None
+        
+        # For typewriter effect
+        self.typewriter_timer = QTimer()
+        self.typewriter_timer.setInterval(10)  # 10ms between characters (very fast)
+        self.typewriter_timer.timeout.connect(self._typewriter_update)
+        self.current_response = ""
+        self.displayed_chars = 0
         
         # Create chat display
         self.chat_display = QTextEdit()
@@ -119,9 +124,17 @@ class MainWindow(QMainWindow):
     
     def _process_async(self):
         """Process pending async operations"""
-        self.loop.stop()
-        self.loop.run_forever()
-    
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                return
+            loop.call_soon(loop.stop)
+            loop.run_forever()
+        except Exception as e:
+            print(f"Error in _process_async: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
+
     def _setup_main_content(self):
         """Setup the main content area with welcome message and input"""
         right_panel = QWidget()
@@ -134,12 +147,52 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.welcome)
         
         # Add chat display in the middle with stretch
+        self.chat_display = QTextEdit()
+        self.chat_display.setReadOnly(True)
+        self.chat_display.setStyleSheet("""
+            QTextEdit {
+                background-color: #F8EFD8;
+                color: #4a4a4a;
+                border: none;
+                font-family: '.AppleSystemUIFont';
+                font-size: 14px;
+                padding: 5px 15px;
+                margin: 0;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background-color: transparent;
+                width: 8px;
+                margin: 0;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(74, 74, 74, 0.2);
+                min-height: 20px;
+                border-radius: 4px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0;
+                background: none;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
+            }
+        """)
         layout.addWidget(self.chat_display, 1)  # Added stretch factor
         
-        # Add text input at the bottom
+        # Create a container for the text input to handle stretching
+        input_container = QWidget()
+        input_layout = QHBoxLayout(input_container)
+        input_layout.setContentsMargins(0, 0, 0, 0)
+        input_layout.setSpacing(0)
+        
+        # Add text input with stretch
         self.text_input = TextInput()
         self.text_input.message_sent.connect(self._handle_message)
-        layout.addWidget(self.text_input)
+        input_layout.addWidget(self.text_input, 1)  # Add stretch factor
+        
+        # Add input container to main layout
+        layout.addWidget(input_container)
         
         return right_panel
 
@@ -163,42 +216,135 @@ class MainWindow(QMainWindow):
 
     def _handle_message(self, message: str):
         """Handle incoming message from text input."""
-        # Add user message with right alignment
-        user_message = f'<div style="text-align: right; margin: 8px 0;"><span style="background-color: #e8dcc8; padding: 8px 12px; border-radius: 15px; display: inline-block; max-width: 80%;">{message}</span></div>'
-        self.chat_display.append(user_message)
-        
-        # Process message asynchronously
-        asyncio.create_task(self._process_message(message))
+        try:
+            # Add user message with right alignment in right 60% of space
+            user_message = f'''
+                <table width="100%" cellspacing="0" cellpadding="0">
+                    <tr>
+                        <td width="40%"></td>
+                        <td width="60%" align="right">
+                            <div style="
+                                padding: 12px 16px; 
+                                border-radius: 20px;
+                                display: inline-block;
+                                max-width: 100%;
+                                word-wrap: break-word;
+                                margin: 4px 0;
+                            ">{message}</div>
+                        </td>
+                    </tr>
+                </table>
+            '''
+            self.chat_display.append(user_message)
+            
+            # Process message asynchronously
+            loop = asyncio.get_event_loop()
+            loop.create_task(self._process_message(message))
+            
+        except Exception as e:
+            print(f"Error in _handle_message: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
 
     async def _process_message(self, message: str):
         """Process a message asynchronously"""
-        print(f"\nProcessing message: {message}")
         try:
             # Get response from brain
             response = await self.brain.process_message(message)
-            print(f"Received response from Gemini: {response}")
             
-            # Add Octavia's response with left alignment
-            octavia_message = f'<div style="text-align: left; margin: 8px 0;"><span style="background-color: #d4c3a3; padding: 8px 12px; border-radius: 15px; display: inline-block; max-width: 80%;">{response}</span></div>'
-            self.chat_display.append(octavia_message)
+            # Prepare for typewriter effect
+            self.current_response = response
+            self.displayed_chars = 0
             
-            print("Message processing complete")
+            # Add Octavia's response container
+            octavia_container = f'''
+                <table width="100%" cellspacing="0" cellpadding="0">
+                    <tr>
+                        <td width="60%">
+                            <div style="
+                                padding: 12px 16px; 
+                                border-radius: 20px;
+                                display: inline-block;
+                                max-width: 100%;
+                                word-wrap: break-word;
+                                margin: 4px 0;
+                            "></div>
+                        </td>
+                        <td width="40%"></td>
+                    </tr>
+                </table>
+            '''
+            self.chat_display.append(octavia_container)
+            
+            # Start typewriter effect
+            self.typewriter_timer.start()
+            
         except Exception as e:
-            print(f"Error processing message: {e}")
-            error_message = f'<div style="text-align: left; margin: 8px 0; color: #ff4444;">Error: {str(e)}</div>'
+            error_message = f'''
+                <table width="100%" cellspacing="0" cellpadding="0">
+                    <tr>
+                        <td width="60%">
+                            <div style="
+                                color: #ff4444;
+                                padding: 12px 16px; 
+                                border-radius: 20px;
+                                display: inline-block;
+                                max-width: 100%;
+                                word-wrap: break-word;
+                                margin: 4px 0;
+                            ">{str(e)}</div>
+                        </td>
+                        <td width="40%"></td>
+                    </tr>
+                </table>
+            '''
             self.chat_display.append(error_message)
+            # Re-enable text input on error
+            self.text_input.message_processed()
+
+    def _typewriter_update(self):
+        """Update typewriter effect"""
+        if self.displayed_chars < len(self.current_response):
+            # Get next chunk of characters (3 chars at a time for speed)
+            chunk_size = 3
+            next_chars = self.current_response[self.displayed_chars:self.displayed_chars + chunk_size]
+            self.displayed_chars += chunk_size
+            
+            # Add the next characters
+            cursor = self.chat_display.textCursor()
+            cursor.movePosition(QTextCursor.End)
+            cursor.insertText(next_chars)
+            self.chat_display.setTextCursor(cursor)
+            
+            # Scroll to bottom
+            self.chat_display.verticalScrollBar().setValue(
+                self.chat_display.verticalScrollBar().maximum()
+            )
+        else:
+            self.typewriter_timer.stop()
+            # Re-enable text input
+            self.text_input.message_processed()
 
 
-def main():
-    app = QApplication(sys.argv)
-    
-    window = MainWindow()
-    window.show()
+async def main():
+    """Main entry point for Octavia"""
+    app = QApplication.instance()
+    if not app:
+        app = QApplication(sys.argv)
     
     try:
-        sys.exit(app.exec())
-    finally:
-        window.loop.close()
+        loop = qasync.QEventLoop(app)
+        asyncio.set_event_loop(loop)
+        
+        window = MainWindow()
+        window.show()
+        
+        with loop:
+            loop.run_forever()
+    except Exception as e:
+        print(f"Error in main: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
