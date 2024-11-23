@@ -14,8 +14,13 @@ from PySide6.QtCore import QEventLoop
 from loguru import logger
 
 # Configure loguru to write to a file
-log_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "logs", "octavia.log")
-logger.add(log_path, rotation="500 MB", level="DEBUG", backtrace=True, diagnose=True)
+log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "logs")
+os.makedirs(log_dir, exist_ok=True)
+log_path = os.path.join(log_dir, "octavia.log")
+logger.add(log_path, rotation="500 MB", level="DEBUG", backtrace=True, diagnose=True,
+           format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
+
+logger.info("Starting Octavia initialization...")
 
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -33,21 +38,26 @@ class MainWindow(QMainWindow):
     """Main window for Octavia"""
     def __init__(self):
         super().__init__()
+        logger.info("Initializing MainWindow...")
         
         # Set up UI
         self.setWindowTitle("Octavia")
         self.resize(1200, 800)
+        logger.debug("Window configuration set")
         
         # Initialize state
         self.state = OctaviaState()
         self.brain = None
+        logger.debug("State initialized")
         
         # For typewriter effect
-        self.typewriter_timer = QTimer()
-        self.typewriter_timer.setInterval(10)  # 10ms between characters (very fast)
+        self.typewriter_timer = QTimer(self)  # Ensure timer has parent
+        self.typewriter_timer.setInterval(50)  # 50ms between updates (slower)
         self.typewriter_timer.timeout.connect(self._typewriter_update)
         self.current_response = ""
         self.displayed_chars = 0
+        self._current_bubble = None  # Initialize bubble reference
+        logger.debug("Typewriter effect configured")
         
         # Apply styles from external stylesheet
         self.setStyleSheet(get_global_styles())
@@ -136,29 +146,33 @@ class MainWindow(QMainWindow):
 
     def _on_api_key_inserted(self, key: str):
         """Handle API key insertion by scheduling async validation"""
+        logger.info("API key inserted - scheduling validation...")
         loop = asyncio.get_event_loop()
         loop.create_task(self._handle_api_key(key))
 
     async def _handle_api_key(self, key: str):
         """Handle API key validation"""
+        logger.info("Attempting API key validation...")
         try:
-            # Initialize brain with API key
+            # Initialize brain with the API key
             self.brain = GeminiBrain(key)
-            # Test the API key
-            is_valid = await self.brain.test_api_key()
+            logger.debug("Brain initialized with API key")
             
-            if is_valid:
-                self.left_panel.set_api_success()
+            # Test the API key with a simple query
+            test_response = await self.brain.test_connection()
+            if test_response:
+                logger.info("API key validated successfully")
                 self.text_input.setEnabled(True)
-                self.text_input.setPlaceholderText("Ask anything - use '@' to mention folder or directory blocks")
-                self.text_input.setFocus()
+                self.text_input.setPlaceholderText("Type your message...")
+                self.left_panel.set_api_success()  # Update left panel status only
             else:
-                error_msg = "Invalid API key - Please check your key and try again"
-                self.left_panel.set_api_error(error_msg)
+                logger.error("API key validation failed - no response from test")
+                self.left_panel.set_api_error("Invalid API key")  # Update left panel status
                 self.brain = None
+                
         except Exception as e:
-            logger.error(f"API key validation error: {str(e)}")
-            self.left_panel.set_api_error(f"Error: {str(e)}")
+            logger.error(f"API key validation failed with error: {str(e)}")
+            self.left_panel.set_api_error(str(e))  # Update left panel status
             self.brain = None
 
     def _handle_message(self, message: str):
@@ -166,35 +180,45 @@ class MainWindow(QMainWindow):
         try:
             # Add user message to chat
             self.chat_display.add_message(message, is_user=True)
-            # Finish the user message so Octavia's response starts fresh
-            self.chat_display.finish_message()
             
             # Process message asynchronously
-            loop = asyncio.get_event_loop()
-            loop.create_task(self._process_message(message))
+            asyncio.create_task(self._process_message(message))
             
         except Exception as e:
-            print(f"Error in _handle_message: {str(e)}")
-            import traceback
-            print(traceback.format_exc())
+            logger.error(f"Error in _handle_message: {str(e)}")
+            self.chat_display.add_message(f"Error processing message: {str(e)}", is_user=False)
+            self.text_input.message_processed()
 
     async def _process_message(self, message: str):
         """Process a message asynchronously"""
+        logger.info(f"Processing message: {message[:50]}...")  # Log first 50 chars of message
         try:
-            # Get response from brain
-            response = await self.brain.process_message(message)
+            if not self.brain:
+                logger.error("Brain not initialized - cannot process message")
+                self.chat_display.add_message("System not ready. Please enter API key first.", is_user=False)
+                self.text_input.message_processed()  # Re-enable input
+                return
+
+            # Start response generation
+            logger.debug("Generating response...")
+            response = await self.brain.generate_response(message)
             
-            # Prepare for typewriter effect
-            self.current_response = response
-            self.displayed_chars = 0
-            
-            # Start typewriter effect
-            self.typewriter_timer.start()
-            
+            if response:
+                logger.info("Response generated successfully")
+                # Start typewriter effect
+                self.current_response = response
+                self.displayed_chars = 0
+                self._current_bubble = None  # Reset bubble reference
+                self.typewriter_timer.start()  # Start the timer
+            else:
+                logger.error("No response generated")
+                self.chat_display.add_message("I apologize, but I couldn't generate a proper response at this time.", is_user=False)
+                self.text_input.message_processed()
+
         except Exception as e:
-            self.chat_display.add_message(f"Error: {str(e)}", is_user=False)
-            # Re-enable text input on error
-            self.text_input.message_processed()
+            logger.error(f"Error processing message: {str(e)}")
+            self.chat_display.add_message(f"I encountered an error: {str(e)}", is_user=False)
+            self.text_input.message_processed()  # Re-enable input on error
 
     def _handle_stop(self):
         """Handle stop request from text input"""
@@ -205,44 +229,66 @@ class MainWindow(QMainWindow):
 
     def _typewriter_update(self):
         """Update typewriter effect"""
-        if self.displayed_chars < len(self.current_response):
-            # Get next chunk of characters
-            next_chars = self.current_response[:self.displayed_chars + 3]
-            self.displayed_chars += 3
-            
-            # Update the message
-            self.chat_display.add_message(next_chars, is_user=False)
-            
-            # Scroll to bottom
-            self.chat_display.verticalScrollBar().setValue(
-                self.chat_display.verticalScrollBar().maximum()
-            )
-        else:
+        try:
+            if not hasattr(self, 'current_response') or not self.current_response:
+                logger.error("No response to display")
+                self.typewriter_timer.stop()
+                return
+
+            if self.displayed_chars < len(self.current_response):
+                # Get next chunk of characters
+                chunk_size = 3  # Display 3 characters at a time
+                next_chars = self.current_response[self.displayed_chars:self.displayed_chars + chunk_size]
+                self.displayed_chars += chunk_size
+                
+                # Update the current message or create new one
+                if not self._current_bubble:
+                    logger.debug("Creating new message bubble")
+                    self._current_bubble = self.chat_display.add_message(next_chars, is_user=False)
+                else:
+                    logger.debug("Updating existing message bubble")
+                    self._current_bubble.update_text(self.current_response[:self.displayed_chars])
+                
+                # Ensure we scroll to see new content
+                self.chat_display._ensure_scrolled_to_bottom()
+            else:
+                logger.debug("Typewriter effect complete")
+                self.typewriter_timer.stop()
+                self._current_bubble = None
+                self.text_input.message_processed()
+
+        except Exception as e:
+            logger.error(f"Error in typewriter update: {str(e)}")
             self.typewriter_timer.stop()
-            # Mark message as complete
-            self.chat_display.finish_message()
-            # Re-enable text input
+            self._current_bubble = None
             self.text_input.message_processed()
 
 
 async def main():
     """Main entry point for Octavia"""
+    logger.info("Starting main application...")
     app = QApplication.instance()
     if not app:
         app = QApplication(sys.argv)
+        logger.debug("Created new QApplication instance")
     
     try:
         loop = qasync.QEventLoop(app)
         asyncio.set_event_loop(loop)
+        logger.debug("Event loop initialized")
         
         window = MainWindow()
         window.show()
+        logger.info("Main window created and displayed")
         
         with loop:
+            logger.info("Entering main event loop")
             loop.run_forever()
     except Exception as e:
-        print(f"Error in main: {str(e)}")
+        logger.critical(f"Critical error in main: {str(e)}")
         import traceback
+        logger.critical(traceback.format_exc())
+        print(f"Error in main: {str(e)}")
         print(traceback.format_exc())
 
 if __name__ == "__main__":

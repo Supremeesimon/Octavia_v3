@@ -143,6 +143,83 @@ class GeminiBrain:
                 
             return False
 
+    async def test_connection(self) -> bool:
+        """Test the API connection with a simple query."""
+        try:
+            logger.info("Testing Gemini API connection...")
+            response = self.model.generate_content("Hello")
+            return response is not None and hasattr(response, 'text')
+        except Exception as e:
+            logger.error(f"API connection test failed: {str(e)}")
+            return False
+
+    async def generate_response(self, message: str, context: Dict = None, history: List[Dict] = None) -> str:
+        """Generate a response to a message with optional context and history."""
+        try:
+            logger.info("Generating response...")
+            
+            # Format the prompt with context and personality
+            system_prompt = """You are Octavia, a friendly and intelligent AI assistant with a consistent personality.
+
+Key traits:
+- Warm and approachable, but professional
+- Concise and clear in communication
+- Honest about your capabilities
+- Consistent in how you introduce yourself
+
+Introduction rules:
+- Only introduce yourself when someone says hello or asks about you
+- When introducing yourself, say: "I'm Octavia, an AI assistant focused on helping you with coding, writing, and analysis tasks."
+- For all other responses, get straight to the task
+
+Your current capabilities:
+1. Answer questions and provide information
+2. Help with coding and technical tasks
+3. Assist with writing and analysis
+4. Engage in natural conversation
+
+When providing code:
+1. First ask clarifying questions about requirements
+2. Break down the task into steps
+3. Explain your approach before showing code
+4. Keep code examples focused and complete
+
+Keep regular responses brief (2-3 sentences) but provide complete code examples when requested."""
+            
+            prompt = f"{system_prompt}\n\nUser: {message}"
+            if context:
+                context_str = self._format_context(context)
+                prompt = f"{system_prompt}\n\n{context_str}\n\nUser: {message}"
+            
+            # Generate response asynchronously
+            response = await self.model.generate_content_async(
+                prompt,
+                generation_config={
+                    'temperature': 0.7,
+                    'candidate_count': 1,
+                    'max_output_tokens': 800,  # Longer limit for code examples
+                    'top_p': 0.8,
+                    'top_k': 40,
+                }
+            )
+            
+            if response and hasattr(response, 'text'):
+                return response.text.strip()
+            else:
+                logger.error("No valid response generated")
+                return "I apologize, but I couldn't generate a proper response at this time."
+                
+        except Exception as e:
+            logger.error(f"Error generating response: {str(e)}")
+            error_msg = str(e).lower()
+            
+            if "rate" in error_msg or "limit" in error_msg:
+                return "I'm receiving too many requests right now. Please try again in a moment."
+            elif "quota" in error_msg:
+                return "I've reached my API quota. Please try again later."
+            else:
+                return f"I encountered an error: {str(e)}"
+
     def _format_context(self, context: Dict) -> str:
         """Format context for the model"""
         try:

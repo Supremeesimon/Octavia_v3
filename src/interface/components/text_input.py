@@ -15,7 +15,7 @@ class TextInput(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.action_mode = True
+        self.action_mode = False  # Set chat mode as default
         self.setup_ui()
         self.setup_connections()
         self._enabled = True
@@ -116,6 +116,7 @@ class TextInput(QWidget):
 
         # Toggle switch
         self.mode_toggle = ToggleSwitch()
+        self.mode_toggle.setChecked(True)  # Set to Chat mode by default
         mode_layout.addWidget(self.mode_toggle)
 
         # Chat mode label
