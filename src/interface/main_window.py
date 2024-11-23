@@ -126,6 +126,7 @@ class MainWindow(QMainWindow):
         # Add text input with stretch
         self.text_input = TextInput()
         self.text_input.message_sent.connect(self._handle_message)
+        self.text_input.stop_requested.connect(self._handle_stop)
         input_layout.addWidget(self.text_input, 1)  # Add stretch factor
         
         # Add input container to main layout
@@ -193,6 +194,13 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.chat_display.add_message(f"Error: {str(e)}", is_user=False)
             # Re-enable text input on error
+            self.text_input.message_processed()
+
+    def _handle_stop(self):
+        """Handle stop request from text input"""
+        if self.typewriter_timer.isActive():
+            self.typewriter_timer.stop()
+            self.chat_display.finish_message()
             self.text_input.message_processed()
 
     def _typewriter_update(self):

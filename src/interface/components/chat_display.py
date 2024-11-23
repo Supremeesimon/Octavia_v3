@@ -22,7 +22,7 @@ class ChatDisplay(QScrollArea):
         # Layout
         self.layout = QVBoxLayout()
         self.layout.setSpacing(8)
-        self.layout.setContentsMargins(16, 16, 16, 16)
+        self.layout.setContentsMargins(8, 8, 8, 8)
         self.layout.addStretch()
         self.container.setLayout(self.layout)
         

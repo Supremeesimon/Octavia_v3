@@ -4,13 +4,14 @@ Text input component for Octavia
 
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QTextEdit, QPushButton,
                               QVBoxLayout, QLabel)
-from PySide6.QtCore import Signal, Qt, QTimer, QEvent
+from PySide6.QtCore import Signal, Qt, QTimer, QEvent, Property
 from .toggle_switch import ToggleSwitch
 
 
 class TextInput(QWidget):
     message_sent = Signal(str)
     mode_changed = Signal(bool)
+    stop_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -63,11 +64,31 @@ class TextInput(QWidget):
         self.attach_button.setToolTip("Attach files (images, PDFs, documents)")
         right_layout.addWidget(self.attach_button)
 
-        # Send button
+        # Send/Stop button
         self.send_button = QPushButton("→")  
         self.send_button.setObjectName("sendButton")
         self.send_button.setFixedSize(32, 32)  
         self.send_button.setToolTip("Send message")
+        # Match text input background color
+        self.send_button.setStyleSheet("""
+            QPushButton#sendButton {
+                border: 1px solid #e8dcc8;
+                border-radius: 16px;
+                background: #eadfd0;
+                color: #8B7355;
+                font-size: 20px;
+            }
+            QPushButton#sendButton[stop="true"] {
+                background: #eadfd0;
+                color: #8B7355;
+                font-family: Arial;
+                font-weight: bold;
+            }
+            QPushButton#sendButton:hover {
+                background: #e8dcc8;
+                color: #8B7355;
+            }
+        """)
         right_layout.addWidget(self.send_button)
 
         # Loading dots for send button (hidden by default)
@@ -131,7 +152,12 @@ class TextInput(QWidget):
         return super().eventFilter(obj, event)
 
     def _send_message(self):
-        if not self._enabled or self._is_sending:
+        if not self._enabled:
+            return
+            
+        if self._is_sending:
+            # If currently sending, treat as stop button
+            self.stop_requested.emit()
             return
             
         message = self.text_input.toPlainText().strip()
@@ -139,8 +165,11 @@ class TextInput(QWidget):
             # Start loading state
             self._is_sending = True
             self.text_input.setEnabled(False)
-            self.send_button.setText("•")
-            self._loading_timer.start()
+            self.send_button.setText("⏹")
+            self.send_button.setProperty("stop", True)
+            self.send_button.style().unpolish(self.send_button)
+            self.send_button.style().polish(self.send_button)
+            self.send_button.setToolTip("Stop Octavia's response")
             
             # Emit message
             self.message_sent.emit(message)
@@ -153,8 +182,11 @@ class TextInput(QWidget):
         """Call this when the message has been processed"""
         self._is_sending = False
         self.text_input.setEnabled(True)
-        self._loading_timer.stop()
         self.send_button.setText("→")
+        self.send_button.setProperty("stop", False)
+        self.send_button.style().unpolish(self.send_button)
+        self.send_button.style().polish(self.send_button)
+        self.send_button.setToolTip("Send message")
         # Set focus back to text input
         self.text_input.setFocus()
 
