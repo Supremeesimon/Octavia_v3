@@ -3,8 +3,9 @@ Left panel component for Octavia
 """
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, 
-                             QLabel, QLineEdit)
+                             QLabel, QLineEdit, QHBoxLayout)
 from PySide6.QtCore import Qt, Signal
+from .status_dot import PulsingDot
 
 class LeftPanel(QWidget):
     """Left panel component"""
@@ -44,10 +45,24 @@ class LeftPanel(QWidget):
         self.insert_key_btn.clicked.connect(self._handle_key_insert)
         layout.addWidget(self.insert_key_btn)
         
+        # Status section with dot and text
+        status_layout = QHBoxLayout()
+        status_layout.setSpacing(8)
+        
+        self.status_dot = PulsingDot(self)
+        status_layout.addWidget(self.status_dot)
+        
         self.api_status = QLabel("")
         self.api_status.setObjectName("apiKeyStatus")
+        self.api_status.setAttribute(Qt.WA_TranslucentBackground)  # Make background transparent
+        status_layout.addWidget(self.api_status)
+        
+        status_layout.addStretch()  # Push dot and text to the left
+        layout.addLayout(status_layout)
+        
+        # Initially hide status
         self.api_status.hide()
-        layout.addWidget(self.api_status)
+        self.status_dot.hide()
         
     def _handle_key_insert(self):
         """Handle API key insertion"""
@@ -61,7 +76,13 @@ class LeftPanel(QWidget):
         self.api_key_input.clear()
         self.api_key_input.setEnabled(False)
         self.insert_key_btn.hide()
-        self.api_status.setStyleSheet("color: #2ecc71;")  # Green color
+        
+        # Update status dot
+        self.status_dot.set_success()
+        self.status_dot.show()
+        
+        # Update status text
+        self.api_status.setStyleSheet("color: #2ecc71; background: transparent;")  # Green color with transparent background
         self.api_status.setText("✓ API key activated")
         self.api_status.show()
         
@@ -71,6 +92,12 @@ class LeftPanel(QWidget):
         self.api_key_input.setEnabled(True)
         self.api_key_input.setFocus()
         self.insert_key_btn.show()
-        self.api_status.setStyleSheet("color: #e74c3c;")  # Red color
+        
+        # Update status dot
+        self.status_dot.set_error()
+        self.status_dot.show()
+        
+        # Update status text
+        self.api_status.setStyleSheet("color: #e74c3c; background: transparent;")  # Red color with transparent background
         self.api_status.setText(error_msg if error_msg else "Invalid API key")
         self.api_status.show()
