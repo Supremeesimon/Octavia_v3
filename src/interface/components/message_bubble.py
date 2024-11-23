@@ -43,6 +43,8 @@ class MessageBubble(QWidget):
                 padding: 8px 12px;
                 font-size: 14px;
                 line-height: 1.4;
+                selection-background-color: white;
+                selection-color: #2C1810;
             }}
         """)
         
