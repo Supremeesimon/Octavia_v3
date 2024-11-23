@@ -53,9 +53,24 @@ class LeftPanel(QWidget):
         """Handle API key insertion"""
         key = self.api_key_input.text().strip()
         if key:
+            # Just emit the key, don't change UI state yet
             self.api_key_inserted.emit(key)
-            self.api_key_input.clear()
-            self.api_key_input.setEnabled(False)
-            self.insert_key_btn.hide()
-            self.api_status.setText("✓ Activated")
-            self.api_status.show()
+            
+    def set_api_success(self):
+        """Handle successful API key validation"""
+        self.api_key_input.clear()
+        self.api_key_input.setEnabled(False)
+        self.insert_key_btn.hide()
+        self.api_status.setStyleSheet("color: #2ecc71;")  # Green color
+        self.api_status.setText("✓ API key activated")
+        self.api_status.show()
+        
+    def set_api_error(self, error_msg=None):
+        """Handle failed API key validation"""
+        self.api_key_input.clear()
+        self.api_key_input.setEnabled(True)
+        self.api_key_input.setFocus()
+        self.insert_key_btn.show()
+        self.api_status.setStyleSheet("color: #e74c3c;")  # Red color
+        self.api_status.setText(error_msg if error_msg else "Invalid API key")
+        self.api_status.show()
