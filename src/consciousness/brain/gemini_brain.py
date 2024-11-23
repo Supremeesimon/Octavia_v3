@@ -14,7 +14,7 @@ class GeminiBrain:
     def __init__(self, api_key: str = None):
         """Initialize the Gemini brain with an API key."""
         try:
-            print("Initializing Gemini brain...")
+            logger.info("Initializing Gemini brain...")
             
             # Load API key from environment if not provided
             if not api_key:
@@ -22,47 +22,23 @@ class GeminiBrain:
                 api_key = os.getenv('GEMINI_API_KEY')
             
             if not api_key:
-                print("Error: No API key provided!")
-                raise ValueError("API key is required. Set it in .env file or provide directly.")
+                logger.error("No API key provided!")
+                raise ValueError("API key is required")
             
-            print("Configuring Gemini API...")
-            genai.configure(api_key=api_key)
+            # Clean and store the key
+            self._api_key = api_key.strip()
             
-            # Initialize Gemini model - using gemini-pro for now until Flash is available
-            print("Creating Gemini model...")
-            self.model = genai.GenerativeModel(
-                model_name='gemini-pro',
-                generation_config={
-                    'temperature': 0.7,
-                    'top_p': 0.8,
-                    'top_k': 40,
-                    'max_output_tokens': 2048,
-                },
-                safety_settings=[
-                    {
-                        "category": "HARM_CATEGORY_HARASSMENT",
-                        "threshold": "BLOCK_MEDIUM_AND_ABOVE"
-                    },
-                    {
-                        "category": "HARM_CATEGORY_HATE_SPEECH",
-                        "threshold": "BLOCK_MEDIUM_AND_ABOVE"
-                    },
-                    {
-                        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                        "threshold": "BLOCK_MEDIUM_AND_ABOVE"
-                    },
-                    {
-                        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                        "threshold": "BLOCK_MEDIUM_AND_ABOVE"
-                    }
-                ]
-            )
-            print("Successfully initialized Gemini brain")
+            # Configure the client
+            logger.info("Configuring Gemini API...")
+            genai.configure(api_key=self._api_key)
+            
+            # Initialize model with minimal config
+            logger.info("Creating Gemini model...")
+            self.model = genai.GenerativeModel('gemini-pro')
+            logger.info("Successfully initialized Gemini brain")
             
         except Exception as e:
-            print(f"Error initializing Gemini brain: {str(e)}")
-            import traceback
-            print(traceback.format_exc())
+            logger.error(f"Error initializing Gemini brain: {str(e)}")
             raise
 
     async def think(self, message: str, context: Dict, history: List[Dict]) -> str:
@@ -130,6 +106,42 @@ class GeminiBrain:
             return await self.think(message, {}, [])
         except Exception as e:
             return f"I apologize, but something went wrong: {str(e)}"
+
+    async def test_api_key(self) -> bool:
+        """Test if the API key is valid by making a minimal API call"""
+        try:
+            # Create a minimal test model
+            test_model = genai.GenerativeModel('gemini-pro')
+            
+            # Make a minimal API call
+            logger.debug("Testing API key with minimal request...")
+            response = test_model.generate_content(
+                "hello",
+                generation_config={
+                    'temperature': 0,
+                    'candidate_count': 1,
+                    'max_output_tokens': 1
+                }
+            )
+            
+            # Verify response
+            if response and hasattr(response, 'text'):
+                logger.info("API key validation successful")
+                return True
+                
+            logger.error("Invalid API response")
+            return False
+            
+        except Exception as e:
+            error_msg = str(e).lower()
+            logger.error(f"API key validation failed: {str(e)}")
+            
+            if "api_key_invalid" in error_msg:
+                logger.error("Invalid API key format")
+            elif "quota" in error_msg:
+                logger.error("API quota exceeded")
+                
+            return False
 
     def _format_context(self, context: Dict) -> str:
         """Format context for the model"""

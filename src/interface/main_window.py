@@ -49,39 +49,6 @@ class MainWindow(QMainWindow):
         self.current_response = ""
         self.displayed_chars = 0
         
-        # Create chat display
-        self.chat_display = QTextEdit()
-        self.chat_display.setReadOnly(True)
-        self.chat_display.setStyleSheet("""
-            QTextEdit {
-                background-color: #F8EFD8;
-                color: #4a4a4a;
-                border: none;
-                font-family: '.AppleSystemUIFont';
-                font-size: 14px;
-                padding: 5px 15px;
-                margin: 0;
-            }
-            QScrollBar:vertical {
-                border: none;
-                background-color: transparent;
-                width: 8px;
-                margin: 0;
-            }
-            QScrollBar::handle:vertical {
-                background: rgba(74, 74, 74, 0.2);
-                min-height: 20px;
-                border-radius: 4px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0;
-                background: none;
-            }
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-                background: none;
-            }
-        """)
-        
         # Apply styles from external stylesheet
         self.setStyleSheet(get_global_styles())
         
@@ -103,7 +70,7 @@ class MainWindow(QMainWindow):
         
         # Create left sidebar
         self.left_panel = LeftPanel()
-        self.left_panel.api_key_inserted.connect(self._handle_api_key)
+        self.left_panel.api_key_inserted.connect(self._on_api_key_inserted)
         left_layout.addWidget(self.left_panel)
         main_layout.addWidget(left_container)
         
@@ -196,23 +163,32 @@ class MainWindow(QMainWindow):
         
         return right_panel
 
-    def _handle_api_key(self, key: str):
-        """Handle API key insertion"""
+    def _on_api_key_inserted(self, key: str):
+        """Handle API key insertion by scheduling async validation"""
+        loop = asyncio.get_event_loop()
+        loop.create_task(self._handle_api_key(key))
+
+    async def _handle_api_key(self, key: str):
+        """Handle API key validation"""
         try:
-            # Initialize Gemini brain with the API key
-            self.brain = GeminiBrain(api_key=key)
+            # Initialize brain with API key
+            self.brain = GeminiBrain(key)
+            # Test the API key
+            is_valid = await self.brain.test_api_key()
             
-            # Enable text input and update UI
-            self.text_input.setEnabled(True)
-            self.text_input.setPlaceholderText("Message Octavia...")
-            self.state.api_key = key  # Store the key in state
-            
+            if is_valid:
+                self.left_panel.set_api_success()
+                self.text_input.setEnabled(True)
+                self.text_input.setPlaceholderText("Type your message...")
+                self.text_input.setFocus()
+            else:
+                error_msg = "Invalid API key - Please check your key and try again"
+                self.left_panel.set_api_error(error_msg)
+                self.brain = None
         except Exception as e:
-            # If initialization fails, show error in API status
-            self.left_panel.api_status.setText("❌ Invalid key")
-            self.left_panel.api_status.show()
-            self.left_panel.api_key_input.setEnabled(True)
-            self.left_panel.insert_key_btn.show()
+            logger.error(f"API key validation error: {str(e)}")
+            self.left_panel.set_api_error(f"Error: {str(e)}")
+            self.brain = None
 
     def _handle_message(self, message: str):
         """Handle incoming message from text input."""

@@ -93,36 +93,52 @@ class LeftPanel(QWidget):
         """Handle API key insertion"""
         key = self.api_key_input.text().strip()
         if key:
-            # Just emit the key, don't change UI state yet
+            # Show status elements before emitting
+            self.status_dot.show()
+            self.api_status.show()
+            self.status_dot.set_error()  # Start with error state
+            self.api_status.setText("Validating...")
+            # Emit the key for validation
             self.api_key_inserted.emit(key)
             
     def set_api_success(self):
-        """Handle successful API key validation"""
+        """Show API key success state"""
+        # Update UI elements
         self.api_key_input.clear()
         self.api_key_input.setEnabled(False)
         self.insert_key_btn.hide()
         
-        # Update status dot
+        # Set status dot to success state
         self.status_dot.set_success()
-        self.status_dot.show()
         
-        # Update status text with same color as text input
-        self.api_status.setStyleSheet("color: rgba(0, 0, 0, 0.45);")  # More transparent black
+        # Update status text
+        self.api_status.setStyleSheet("color: rgba(0, 0, 0, 0.45);")
         self.api_status.setText("✓ API key activated")
-        self.api_status.show()
         
-    def set_api_error(self, error_msg=None):
-        """Handle failed API key validation"""
+        # Show status elements
+        self.status_dot.show()
+        self.api_status.show()
+
+    def set_api_error(self, error_message: str = None):
+        """Show API key error state"""
+        # Reset UI elements
         self.api_key_input.clear()
         self.api_key_input.setEnabled(True)
         self.api_key_input.setFocus()
         self.insert_key_btn.show()
         
-        # Update status dot
+        # Set status dot to error state
         self.status_dot.set_error()
-        self.status_dot.show()
         
-        # Update status text with same color as text input
-        self.api_status.setStyleSheet("color: rgba(0, 0, 0, 0.45);")  # More transparent black
-        self.api_status.setText(error_msg if error_msg else "Invalid API key")
+        # Update status text
+        self.api_status.setStyleSheet("color: rgba(0, 0, 0, 0.45);")
+        
+        # Set appropriate error message
+        if error_message and "quota" in error_message.lower():
+            self.api_status.setText("API quota exceeded")
+        else:
+            self.api_status.setText("Sorry, wrong API key")
+        
+        # Show status elements
+        self.status_dot.show()
         self.api_status.show()
