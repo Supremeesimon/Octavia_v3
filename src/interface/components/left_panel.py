@@ -38,6 +38,7 @@ class LeftPanel(QWidget):
         self.api_key_input.setObjectName("apiKeyInput")
         self.api_key_input.setPlaceholderText("Enter activation key...")
         self.api_key_input.setEchoMode(QLineEdit.Password)
+        self.api_key_input.returnPressed.connect(self._handle_key_insert)  # Add Enter key handler
         layout.addWidget(self.api_key_input)
         
         self.insert_key_btn = QPushButton("Insert")

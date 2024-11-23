@@ -179,7 +179,7 @@ class MainWindow(QMainWindow):
             if is_valid:
                 self.left_panel.set_api_success()
                 self.text_input.setEnabled(True)
-                self.text_input.setPlaceholderText("Type your message...")
+                self.text_input.setPlaceholderText("Ask anything - use '@' to mention folder or directory blocks")
                 self.text_input.setFocus()
             else:
                 error_msg = "Invalid API key - Please check your key and try again"
