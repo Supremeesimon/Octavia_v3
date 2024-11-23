@@ -2,8 +2,8 @@
 Chat display component for rendering messages
 """
 
-from PySide6.QtWidgets import QScrollArea, QWidget, QVBoxLayout
-from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QScrollArea, QWidget, QVBoxLayout, QApplication
+from PySide6.QtCore import Qt, QTimer
 from .message_bubble import MessageBubble
 
 class ChatDisplay(QScrollArea):
@@ -56,14 +56,25 @@ class ChatDisplay(QScrollArea):
         # Add stretch back
         self.layout.addStretch()
         
-        # Scroll to bottom
-        self.verticalScrollBar().setValue(
-            self.verticalScrollBar().maximum()
-        )
-        self.verticalScrollBar().setValue(
-            self.verticalScrollBar().maximum()
-        )
-
+        # Process events to ensure layout is updated
+        QApplication.processEvents()
+        
+        # Create a timer for delayed scrolling
+        QTimer.singleShot(50, self._ensure_scrolled_to_bottom)
+        
+    def _ensure_scrolled_to_bottom(self):
+        """Ensure the chat is scrolled to the bottom"""
+        # Process events again to ensure latest layout updates
+        QApplication.processEvents()
+        
+        # Get scrollbar
+        scrollbar = self.verticalScrollBar()
+        
+        # Attempt multiple scrolls with processing in between
+        for _ in range(3):
+            scrollbar.setValue(scrollbar.maximum())
+            QApplication.processEvents()
+            
     def finish_message(self):
         """Mark current message as complete"""
         self.current_message_bubble = None
