@@ -47,17 +47,42 @@ class LeftPanel(QWidget):
         
         # Status section with dot and text
         status_layout = QHBoxLayout()
-        status_layout.setSpacing(8)
+        status_layout.setSpacing(4)
+        status_layout.setContentsMargins(0, 0, 0, 0)
         
+        # Create container for dot
+        dot_container = QWidget()
+        dot_container.setFixedSize(30, 30)
+        dot_container.setAttribute(Qt.WA_TranslucentBackground)
+        dot_layout = QVBoxLayout(dot_container)
+        dot_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Create the status dot
         self.status_dot = PulsingDot(self)
-        status_layout.addWidget(self.status_dot)
+        dot_layout.addWidget(self.status_dot, 0, Qt.AlignCenter)
         
+        # Create container for text
+        text_container = QWidget()
+        text_container.setAttribute(Qt.WA_TranslucentBackground)
+        text_container.setFixedHeight(30)
+        text_layout = QVBoxLayout(text_container)  
+        text_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Configure text
         self.api_status = QLabel("")
         self.api_status.setObjectName("apiKeyStatus")
-        self.api_status.setAttribute(Qt.WA_TranslucentBackground)  # Make background transparent
-        status_layout.addWidget(self.api_status)
+        self.api_status.setAttribute(Qt.WA_TranslucentBackground)
+        font = self.api_status.font()
+        font.setPointSize(13)
+        self.api_status.setFont(font)
+        self.api_status.setStyleSheet("color: rgba(0, 0, 0, 0.45);")
+        text_layout.addWidget(self.api_status, 0, Qt.AlignCenter)
         
-        status_layout.addStretch()  # Push dot and text to the left
+        # Add containers to main layout with baseline alignment
+        status_layout.addWidget(dot_container, 0, Qt.AlignVCenter)
+        status_layout.addWidget(text_container, 0, Qt.AlignVCenter)
+        status_layout.addStretch()
+        
         layout.addLayout(status_layout)
         
         # Initially hide status
@@ -81,8 +106,8 @@ class LeftPanel(QWidget):
         self.status_dot.set_success()
         self.status_dot.show()
         
-        # Update status text
-        self.api_status.setStyleSheet("color: #2ecc71; background: transparent;")  # Green color with transparent background
+        # Update status text with same color as text input
+        self.api_status.setStyleSheet("color: rgba(0, 0, 0, 0.45);")  # More transparent black
         self.api_status.setText("✓ API key activated")
         self.api_status.show()
         
@@ -97,7 +122,7 @@ class LeftPanel(QWidget):
         self.status_dot.set_error()
         self.status_dot.show()
         
-        # Update status text
-        self.api_status.setStyleSheet("color: #e74c3c; background: transparent;")  # Red color with transparent background
+        # Update status text with same color as text input
+        self.api_status.setStyleSheet("color: rgba(0, 0, 0, 0.45);")  # More transparent black
         self.api_status.setText(error_msg if error_msg else "Invalid API key")
         self.api_status.show()

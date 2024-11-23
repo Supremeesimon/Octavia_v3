@@ -3,54 +3,50 @@ Pulsating dot component with glowing effect for status indication
 """
 
 from PySide6.QtWidgets import QWidget, QHBoxLayout
-from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, Property, QParallelAnimationGroup
+from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, Property, QParallelAnimationGroup, QPointF
 from PySide6.QtGui import QPainter, QColor, QRadialGradient
 
 class PulsingDot(QWidget):
     """A pulsating dot widget with glowing effect for status indication"""
     
-    def __init__(self, parent=None, size=8):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.size = size
-        self._opacity = 1.0
-        self._glow_radius = 1.0
-        self._color = QColor("#e74c3c")  # Default to red
-        
-        # Make widget background transparent
+        self.setFixedSize(30, 30)
+        self._opacity = 0.0
+        self._radius = 2.5
+        self._glow_radius = 1.5
+        self._color = QColor("#e74c3c")
         self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setup_ui()
         
-        # Set fixed size (larger to accommodate glow)
-        glow_size = size * 6  # Increased space for glow
-        self.setFixedSize(glow_size, glow_size)
-        
-        # Setup the pulsing animation
-        self._setup_animation()
-    
-    def _setup_animation(self):
-        """Setup the breathing animation group"""
-        # Create animation group for parallel animations
-        self.animation_group = QParallelAnimationGroup()
+    def setup_ui(self):
+        """Setup the animations"""
+        # Create parallel animation group
+        self.animation_group = QParallelAnimationGroup(self)
         
         # Opacity animation
-        self.opacity_animation = QPropertyAnimation(self, b"opacity")
-        self.opacity_animation.setDuration(3000)  # Slower breathing
-        self.opacity_animation.setLoopCount(-1)
-        self.opacity_animation.setStartValue(0.8)  # Start more visible
-        self.opacity_animation.setEndValue(0.3)
+        self.opacity_animation = QPropertyAnimation(self, b"opacity", self)
+        self.opacity_animation.setDuration(2000)  # Slower breathing
+        self.opacity_animation.setStartValue(0.3)  # Start more transparent
+        self.opacity_animation.setEndValue(0.6)    # End less opaque
         self.opacity_animation.setEasingCurve(QEasingCurve.InOutSine)
+        self.opacity_animation.setLoopCount(-1)  # Infinite loop
         
         # Glow radius animation
-        self.glow_animation = QPropertyAnimation(self, b"glow_radius")
-        self.glow_animation.setDuration(3000)  # Match opacity duration
-        self.glow_animation.setLoopCount(-1)
-        self.glow_animation.setStartValue(1.2)  # Start slightly expanded
-        self.glow_animation.setEndValue(1.8)  # Don't expand as much
-        self.glow_animation.setEasingCurve(QEasingCurve.InOutSine)
+        self.glow_radius_animation = QPropertyAnimation(self, b"glow_radius", self)
+        self.glow_radius_animation.setDuration(2000)  # Match opacity duration
+        self.glow_radius_animation.setStartValue(1.2)  # Smaller start
+        self.glow_radius_animation.setEndValue(1.8)    # Smaller end
+        self.glow_radius_animation.setEasingCurve(QEasingCurve.InOutSine)
+        self.glow_radius_animation.setLoopCount(-1)  # Infinite loop
         
-        # Add both animations to group
+        # Add animations to group
         self.animation_group.addAnimation(self.opacity_animation)
-        self.animation_group.addAnimation(self.glow_animation)
+        self.animation_group.addAnimation(self.glow_radius_animation)
         
+        # Start animations immediately
+        self.animation_group.start()
+    
     def start_animation(self):
         """Start the breathing animation"""
         self.animation_group.start()
@@ -59,13 +55,16 @@ class PulsingDot(QWidget):
         """Stop the breathing animation"""
         self.animation_group.stop()
         self._opacity = 1.0
-        self._glow_radius = 1.0
+        self._radius = 2.5
+        self._glow_radius = 1.5
         self.update()
     
     def set_success(self):
         """Set dot color to green for success state"""
         self._color = QColor("#2ecc71")
-        self.stop_animation()
+        self.stop_animation()  # Stop animation for stable appearance
+        self._opacity = 0.8  # Higher fixed opacity for better visibility
+        self._glow_radius = 1.5  # Fixed glow radius
         self.update()
         
     def set_error(self):
@@ -75,45 +74,47 @@ class PulsingDot(QWidget):
         self.update()
         
     def paintEvent(self, event):
-        """Paint the glowing dot"""
+        """Paint the dot with enhanced glow effect"""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         
-        # Calculate center and radius
+        # Center in the larger widget
         center_x = self.width() / 2
         center_y = self.height() / 2
-        base_radius = self.size / 2
+        center = QPointF(center_x, center_y)
+        base_radius = 2.5  # Core dot radius stays the same
         
-        # Create radial gradient for glow effect
-        gradient = QRadialGradient(center_x, center_y, base_radius * 3 * self._glow_radius)
-        gradient.setColorAt(0, QColor(self._color.red(), self._color.green(), self._color.blue(), 180))  # More solid center
-        gradient.setColorAt(0.4, QColor(self._color.red(), self._color.green(), self._color.blue(), 120))
-        gradient.setColorAt(0.7, QColor(self._color.red(), self._color.green(), self._color.blue(), 40))
-        gradient.setColorAt(1.0, QColor(self._color.red(), self._color.green(), self._color.blue(), 0))  # Fully transparent edge
+        # Create dark ring gradient
+        dark_gradient = QRadialGradient(center_x, center_y, base_radius * 1.5)
+        dark_gradient.setColorAt(0, QColor(0, 0, 0, 100))  # Semi-transparent black
+        dark_gradient.setColorAt(1, QColor(0, 0, 0, 0))  # Fully transparent
         
-        # Draw glow with softer opacity
-        painter.setOpacity(self._opacity * 0.5)  # Reduced base opacity for glow
-        painter.setBrush(gradient)
+        # Paint dark ring
+        painter.setBrush(dark_gradient)
         painter.setPen(Qt.NoPen)
+        painter.drawEllipse(center, base_radius * 2, base_radius * 2)
         
-        # Draw circular glow
-        glow_size = base_radius * 6 * self._glow_radius
-        painter.drawEllipse(
-            center_x - glow_size/2,
-            center_y - glow_size/2,
-            glow_size,
-            glow_size
-        )
+        # Create main glow gradient
+        glow_gradient = QRadialGradient(center_x, center_y, base_radius * self._glow_radius * 2)
         
-        # Draw solid dot with full opacity
-        painter.setOpacity(self._opacity)
-        painter.setBrush(self._color)
-        painter.drawEllipse(
-            center_x - base_radius,
-            center_y - base_radius,
-            base_radius * 2,
-            base_radius * 2
-        )
+        # Create glowing effect with multiple color stops
+        glow_gradient.setColorAt(0, QColor(self._color.red(), self._color.green(), self._color.blue(), int(255 * self._opacity)))
+        glow_gradient.setColorAt(0.4, QColor(self._color.red(), self._color.green(), self._color.blue(), int(120 * self._opacity)))
+        glow_gradient.setColorAt(0.7, QColor(self._color.red(), self._color.green(), self._color.blue(), int(50 * self._opacity)))
+        glow_gradient.setColorAt(1, QColor(self._color.red(), self._color.green(), self._color.blue(), 0))
+        
+        # Paint glow
+        painter.setBrush(glow_gradient)
+        painter.drawEllipse(center, base_radius * self._glow_radius * 2, base_radius * self._glow_radius * 2)
+        
+        # Paint core dot
+        core_gradient = QRadialGradient(center_x, center_y, base_radius)
+        core_gradient.setColorAt(0, self._color)
+        core_gradient.setColorAt(0.7, self._color)
+        core_gradient.setColorAt(1, QColor(self._color.red(), self._color.green(), self._color.blue(), int(200 * self._opacity)))
+        
+        painter.setBrush(core_gradient)
+        painter.drawEllipse(center, base_radius, base_radius)
     
     # Properties for animation
     def get_opacity(self):
