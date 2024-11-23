@@ -4,6 +4,7 @@ Message bubble component for individual chat messages
 
 from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout, QSizePolicy
 from PySide6.QtCore import Qt
+import markdown
 
 class MessageBubble(QWidget):
     """
@@ -21,10 +22,13 @@ class MessageBubble(QWidget):
         if is_user:
             layout.addStretch()
         
+        # Convert markdown to HTML with minimal formatting
+        html_text = markdown.markdown(text, extensions=['nl2br'])
+        
         # Create message label
-        self.label = QLabel(text)
-        self.label.setWordWrap(True)  # Re-enable word wrap
-        self.label.setTextFormat(Qt.TextFormat.PlainText)
+        self.label = QLabel(html_text)
+        self.label.setWordWrap(True)
+        self.label.setTextFormat(Qt.TextFormat.RichText)
         self.label.setTextInteractionFlags(
             Qt.TextSelectableByMouse | 
             Qt.TextSelectableByKeyboard
@@ -35,7 +39,7 @@ class MessageBubble(QWidget):
         self.label.setMaximumWidth(800)  # Good width for desktop
         
         # Style label
-        color = "#e8dcc8" if is_user else "#eadfd0"  # Darker than before but still lighter than user
+        color = "#e8dcc8" if is_user else "#eadfd0"
         self.label.setStyleSheet(f"""
             QLabel {{
                 background: {color};
@@ -57,5 +61,6 @@ class MessageBubble(QWidget):
             
     def update_text(self, text):
         """Update the message text"""
-        self.label.setText(text)
+        html_text = markdown.markdown(text, extensions=['nl2br'])
+        self.label.setText(html_text)
         self.label.adjustSize()
