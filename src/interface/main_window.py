@@ -19,7 +19,7 @@ logger.add(log_path, rotation="500 MB", level="DEBUG", backtrace=True, diagnose=
 
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from interface.components import WelcomeSection, TextInput, get_global_styles, LeftPanel
+from interface.components import WelcomeSection, TextInput, get_global_styles, LeftPanel, ChatDisplay
 from consciousness.brain.gemini_brain import GeminiBrain
 
 class OctaviaState:
@@ -114,37 +114,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.welcome)
         
         # Add chat display in the middle with stretch
-        self.chat_display = QTextEdit()
-        self.chat_display.setReadOnly(True)
-        self.chat_display.setStyleSheet("""
-            QTextEdit {
-                background-color: #F8EFD8;
-                color: #4a4a4a;
-                border: none;
-                font-family: '.AppleSystemUIFont';
-                font-size: 14px;
-                padding: 5px 15px;
-                margin: 0;
-            }
-            QScrollBar:vertical {
-                border: none;
-                background-color: transparent;
-                width: 8px;
-                margin: 0;
-            }
-            QScrollBar::handle:vertical {
-                background: rgba(74, 74, 74, 0.2);
-                min-height: 20px;
-                border-radius: 4px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0;
-                background: none;
-            }
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-                background: none;
-            }
-        """)
+        self.chat_display = ChatDisplay()
         layout.addWidget(self.chat_display, 1)  # Added stretch factor
         
         # Create a container for the text input to handle stretching
@@ -193,25 +163,10 @@ class MainWindow(QMainWindow):
     def _handle_message(self, message: str):
         """Handle incoming message from text input."""
         try:
-            # Add user message with right alignment in right 60% of space
-            user_message = f'''
-                <table width="100%" cellspacing="0" cellpadding="0">
-                    <tr>
-                        <td width="40%"></td>
-                        <td width="60%" align="right">
-                            <div style="
-                                padding: 12px 16px; 
-                                border-radius: 20px;
-                                display: inline-block;
-                                max-width: 100%;
-                                word-wrap: break-word;
-                                margin: 4px 0;
-                            ">{message}</div>
-                        </td>
-                    </tr>
-                </table>
-            '''
-            self.chat_display.append(user_message)
+            # Add user message to chat
+            self.chat_display.add_message(message, is_user=True)
+            # Finish the user message so Octavia's response starts fresh
+            self.chat_display.finish_message()
             
             # Process message asynchronously
             loop = asyncio.get_event_loop()
@@ -232,65 +187,23 @@ class MainWindow(QMainWindow):
             self.current_response = response
             self.displayed_chars = 0
             
-            # Add Octavia's response container
-            octavia_container = f'''
-                <table width="100%" cellspacing="0" cellpadding="0">
-                    <tr>
-                        <td width="60%">
-                            <div style="
-                                padding: 12px 16px; 
-                                border-radius: 20px;
-                                display: inline-block;
-                                max-width: 100%;
-                                word-wrap: break-word;
-                                margin: 4px 0;
-                            "></div>
-                        </td>
-                        <td width="40%"></td>
-                    </tr>
-                </table>
-            '''
-            self.chat_display.append(octavia_container)
-            
             # Start typewriter effect
             self.typewriter_timer.start()
             
         except Exception as e:
-            error_message = f'''
-                <table width="100%" cellspacing="0" cellpadding="0">
-                    <tr>
-                        <td width="60%">
-                            <div style="
-                                color: #ff4444;
-                                padding: 12px 16px; 
-                                border-radius: 20px;
-                                display: inline-block;
-                                max-width: 100%;
-                                word-wrap: break-word;
-                                margin: 4px 0;
-                            ">{str(e)}</div>
-                        </td>
-                        <td width="40%"></td>
-                    </tr>
-                </table>
-            '''
-            self.chat_display.append(error_message)
+            self.chat_display.add_message(f"Error: {str(e)}", is_user=False)
             # Re-enable text input on error
             self.text_input.message_processed()
 
     def _typewriter_update(self):
         """Update typewriter effect"""
         if self.displayed_chars < len(self.current_response):
-            # Get next chunk of characters (3 chars at a time for speed)
-            chunk_size = 3
-            next_chars = self.current_response[self.displayed_chars:self.displayed_chars + chunk_size]
-            self.displayed_chars += chunk_size
+            # Get next chunk of characters
+            next_chars = self.current_response[:self.displayed_chars + 3]
+            self.displayed_chars += 3
             
-            # Add the next characters
-            cursor = self.chat_display.textCursor()
-            cursor.movePosition(QTextCursor.End)
-            cursor.insertText(next_chars)
-            self.chat_display.setTextCursor(cursor)
+            # Update the message
+            self.chat_display.add_message(next_chars, is_user=False)
             
             # Scroll to bottom
             self.chat_display.verticalScrollBar().setValue(
@@ -298,6 +211,8 @@ class MainWindow(QMainWindow):
             )
         else:
             self.typewriter_timer.stop()
+            # Mark message as complete
+            self.chat_display.finish_message()
             # Re-enable text input
             self.text_input.message_processed()
 
