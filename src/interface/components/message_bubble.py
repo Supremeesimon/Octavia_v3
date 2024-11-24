@@ -2,38 +2,39 @@
 Message bubble component for individual chat messages
 """
 
-from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout, QVBoxLayout, QSizePolicy, QPushButton
+from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout, QVBoxLayout, QSizePolicy, QPushButton, QFrame
 from PySide6.QtCore import Qt, QDateTime, QSize
 from PySide6.QtGui import QIcon, QGuiApplication
 import markdown
 import os
 
-class MessageBubble(QWidget):
+class MessageBubble(QFrame):
     """
     Custom widget for rendering individual chat messages with proper styling
     """
     def __init__(self, text, is_user=False):
         super().__init__()
-        
-        # Store the raw text for copying
+        self.is_user = is_user
+        self.text = text
         self.raw_text = text
+        self.setup_ui()
         
-        # Create main layout
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(2)  # Small gap between message and timestamp
-        self.setLayout(main_layout)
+    def setup_ui(self):
+        """Set up the message bubble UI"""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)  # Small gap between message and timestamp
         
         # Create message layout
         msg_layout = QHBoxLayout()
         msg_layout.setContentsMargins(0, 0, 0, 0)
         
         # Add initial stretch for right alignment if user message
-        if is_user:
+        if self.is_user:
             msg_layout.addStretch()
         
         # Convert markdown to HTML with minimal formatting
-        html_text = markdown.markdown(text, extensions=['nl2br'])
+        html_text = markdown.markdown(self.text, extensions=['nl2br'])
         
         # Create message label
         self.label = QLabel(html_text)
@@ -49,7 +50,7 @@ class MessageBubble(QWidget):
         self.label.setMaximumWidth(800)  # Good width for desktop
         
         # Style message label
-        color = "#e8dcc8" if is_user else "#eadfd0"
+        color = "#e8dcc8" if self.is_user else "#eadfd0"
         self.label.setStyleSheet(f"""
             QLabel {{
                 background: {color};
@@ -66,7 +67,7 @@ class MessageBubble(QWidget):
         msg_layout.addWidget(self.label)
         
         # Add final stretch for left alignment if Octavia message
-        if not is_user:
+        if not self.is_user:
             msg_layout.addStretch()
         
         # Create timestamp layout with copy button
@@ -75,7 +76,7 @@ class MessageBubble(QWidget):
         time_layout.setSpacing(4)  # Small gap between timestamp and copy button
         
         # Add initial stretch for right alignment if user message
-        if is_user:
+        if self.is_user:
             time_layout.addStretch()
         
         # Create and style timestamp label
@@ -118,7 +119,7 @@ class MessageBubble(QWidget):
         copy_button.clicked.connect(self._copy_text)
         
         # Add timestamp and copy button to layout
-        if is_user:
+        if self.is_user:
             time_layout.addWidget(copy_button)
             time_layout.addWidget(self.time_label)
         else:
@@ -126,12 +127,12 @@ class MessageBubble(QWidget):
             time_layout.addWidget(copy_button)
         
         # Add final stretch for left alignment if Octavia message
-        if not is_user:
+        if not self.is_user:
             time_layout.addStretch()
         
         # Add both layouts to main layout
-        main_layout.addLayout(msg_layout)
-        main_layout.addLayout(time_layout)
+        layout.addLayout(msg_layout)
+        layout.addLayout(time_layout)
             
     def update_text(self, text):
         """Update the message text"""
@@ -143,6 +144,11 @@ class MessageBubble(QWidget):
         # Update timestamp
         current_time = QDateTime.currentDateTime().toString("hh:mm AP")
         self.time_label.setText(current_time)
+        
+    def finish(self):
+        """Mark the message as finished"""
+        # Optional: Add visual indicator that message is complete
+        pass
         
     def _copy_text(self):
         """Copy the raw message text to clipboard"""

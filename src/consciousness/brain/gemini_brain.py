@@ -3,10 +3,11 @@ Octavia's Gemini-powered Brain using direct API access
 """
 
 import os
+import re
 from typing import Dict, List
-import google.generativeai as genai
 from loguru import logger
-from dotenv import load_dotenv
+
+from .modules import CommandProcessor, ConversationManager, ModelManager
 
 class GeminiBrain:
     """Brain powered by Google's Gemini API"""
@@ -16,89 +17,145 @@ class GeminiBrain:
         try:
             logger.info("Initializing Gemini brain...")
             
-            # Load API key from environment if not provided
-            if not api_key:
-                load_dotenv()
-                api_key = os.getenv('GEMINI_API_KEY')
+            # Initialize components in correct order
+            self.model_manager = ModelManager(api_key)
+            self.conversation_manager = ConversationManager(self)  # Pass self as consciousness
+            self.command_processor = CommandProcessor(self, self.conversation_manager)
             
-            if not api_key:
-                logger.error("No API key provided!")
-                raise ValueError("API key is required")
-            
-            # Clean and store the key
-            self._api_key = api_key.strip()
-            
-            # Configure the client
-            logger.info("Configuring Gemini API...")
-            genai.configure(api_key=self._api_key)
-            
-            # Initialize model with minimal config
-            logger.info("Creating Gemini model...")
-            self.model = genai.GenerativeModel('gemini-pro')
             logger.info("Successfully initialized Gemini brain")
             
         except Exception as e:
             logger.error(f"Error initializing Gemini brain: {str(e)}")
             raise
 
-    async def think(self, message: str, context: Dict, history: List[Dict]) -> str:
-        """Process a message with context and history to generate a response."""
+    def set_api_key(self, api_key: str):
+        """Set or update the API key"""
+        self.model_manager._initialize_model(api_key)
+        
+    async def test_connection(self) -> bool:
+        """Test if the API key is valid by making a simple request"""
         try:
-            # Create chat with optimized settings for speed
-            model = genai.GenerativeModel(
-                model_name='gemini-pro',
-                generation_config={
-                    'temperature': 0.7,  # Lower temperature for faster responses
-                    'top_p': 0.1,  # Lower top_p for faster responses
-                    'top_k': 1,  # Lower top_k for faster responses
-                    'max_output_tokens': 1024,  # Reduced max tokens for speed
-                },
-                safety_settings=[
-                    {
-                        "category": "HARM_CATEGORY_HARASSMENT",
-                        "threshold": "BLOCK_ONLY_HIGH"
-                    },
-                    {
-                        "category": "HARM_CATEGORY_HATE_SPEECH",
-                        "threshold": "BLOCK_ONLY_HIGH"
-                    },
-                    {
-                        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                        "threshold": "BLOCK_ONLY_HIGH"
-                    },
-                    {
-                        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                        "threshold": "BLOCK_ONLY_HIGH"
-                    }
-                ]
-            )
-            
-            chat = model.start_chat(history=[])
-            
-            # Prepare a more specific prompt for faster responses
-            prompt = f"""You are Octavia, a friendly and helpful AI assistant. Respond briefly and directly to: {message}"""
-            
-            # Send message with optimized settings
-            response = await chat.send_message_async(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=0.7,
-                    candidate_count=1,
-                    max_output_tokens=1024,
-                    top_p=0.1,
-                    top_k=1,
-                )
-            )
-            
-            if not response.text:
-                return "I apologize, but I wasn't able to generate a proper response. Could you please try rephrasing your message?"
+            if not self.model_manager.model:
+                return False
                 
-            return response.text.strip()
+            # Try a simple test prompt
+            test_prompt = "Say 'OK' if you can read this."
+            response = await self.model_manager.generate_response(test_prompt)
+            return "ok" in response.lower()
             
         except Exception as e:
-            error_msg = f"I apologize, but I encountered an error: {str(e)}"
-            print(f"Error in think: {error_msg}")
-            return error_msg
+            logger.error(f"Error testing connection: {str(e)}")
+            return False
+            
+    async def generate_response(self, message: str) -> str:
+        """Generate a response using the Gemini model"""
+        try:
+            if not self.model_manager.model:
+                raise ValueError("Model not initialized. Please set API key first.")
+                
+            # Get system prompt
+            system_prompt = self._get_system_prompt()
+            
+            # For the "list capabilities" type questions, use a special prompt
+            if any(phrase in message.lower() for phrase in ["what can you do", "list all you can", "your capabilities", "help me understand"]):
+                return '''I'm Octavia v3, and I can help you with:
+
+1. Code Intelligence
+   - Understand and analyze Python code
+   - Find and explain code references
+   - Help improve code organization
+   - Assist with debugging
+
+2. System Operations
+   - Execute shell commands
+   - Manage processes and files
+   - Monitor system resources
+   - Handle file operations safely
+
+3. Development Support
+   - Create and edit code files
+   - Set up project structures
+   - Implement new features
+   - Fix bugs and issues
+
+4. UI/UX Features
+   - Fast response rendering
+   - Clear message formatting
+   - Interactive chat interface
+   - Stop/resume capabilities
+
+Just ask me anything related to these areas, and I'll help you out!'''
+            
+            # For other questions, use the regular prompt
+            full_prompt = f"{system_prompt}\n\nUser: {message}\n\nAssistant:"
+            
+            # Generate response
+            response = await self.model_manager.generate_response(full_prompt)
+            return response.strip()
+            
+        except Exception as e:
+            logger.error(f"Error generating response: {str(e)}")
+            raise
+
+    def _get_system_prompt(self) -> str:
+        """Get the system prompt that defines Octavia's capabilities."""
+        return '''You are Octavia v3, an advanced AI assistant. Your key capabilities include:
+
+1. Code Intelligence: Parse code, analyze references, assist with improvements
+2. System Control: Execute commands, manage processes, monitor resources
+3. File Operations: Navigate files, analyze contents, handle operations safely
+4. Communication: Clear responses, maintain context, process commands
+5. UI Integration: Direct interface interaction, clear output formatting
+
+Always be proactive, precise, and security-conscious in your responses.'''
+
+    async def think(self, message: str, context: Dict, history: List[Dict]) -> str:
+        """Process a message with context and history to generate a response"""
+        try:
+            # Build the prompt
+            prompt = f"{self._get_system_prompt()}\n\n"
+            
+            # Add context if available
+            if context:
+                prompt += f"{self.conversation_manager.format_context(context)}\n"
+            
+            # Add conversation history
+            if history:
+                prompt += f"{self.conversation_manager.format_history(history)}\n"
+            
+            # Add the current message
+            prompt += f"User: {message}\nOctavia:"
+            
+            # Generate and process response
+            response = await self.model_manager.generate_response(prompt)
+            
+            # Execute any commands in the response
+            if "```" in response:
+                blocks = response.split("```")
+                for i in range(1, len(blocks), 2):
+                    if blocks[i].startswith(("shell", "bash")):
+                        command = blocks[i].split("\n", 1)[1].strip()
+                        result = await self.command_processor.execute_command(command)
+                        if result["success"]:
+                            response = response.replace(
+                                f"```{blocks[i]}```",
+                                f"\n{result['output']}\n"
+                            )
+                        else:
+                            response = response.replace(
+                                f"```{blocks[i]}```",
+                                f"\n{result['output']}\n"
+                            )
+            
+            # Store in history
+            self.conversation_manager.add_to_history(message, response)
+            
+            return response
+            
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Error in think: {error_msg}")
+            return f"I hit a small snag while processing that. Could you try again? 🤔\nTechnical details: {error_msg}"
 
     async def process_message(self, message: str) -> str:
         """Process a message and return the response"""
@@ -107,156 +164,14 @@ class GeminiBrain:
         except Exception as e:
             return f"I apologize, but something went wrong: {str(e)}"
 
-    async def test_api_key(self) -> bool:
-        """Test if the API key is valid by making a minimal API call"""
-        try:
-            # Create a minimal test model
-            test_model = genai.GenerativeModel('gemini-pro')
-            
-            # Make a minimal API call
-            logger.debug("Testing API key with minimal request...")
-            response = test_model.generate_content(
-                "hello",
-                generation_config={
-                    'temperature': 0,
-                    'candidate_count': 1,
-                    'max_output_tokens': 1
-                }
-            )
-            
-            # Verify response
-            if response and hasattr(response, 'text'):
-                logger.info("API key validation successful")
-                return True
-                
-            logger.error("Invalid API response")
-            return False
-            
-        except Exception as e:
-            error_msg = str(e).lower()
-            logger.error(f"API key validation failed: {str(e)}")
-            
-            if "api_key_invalid" in error_msg:
-                logger.error("Invalid API key format")
-            elif "quota" in error_msg:
-                logger.error("API quota exceeded")
-                
-            return False
-
     async def test_connection(self) -> bool:
         """Test the API connection with a simple query."""
-        try:
-            logger.info("Testing Gemini API connection...")
-            response = self.model.generate_content("Hello")
-            return response is not None and hasattr(response, 'text')
-        except Exception as e:
-            logger.error(f"API connection test failed: {str(e)}")
-            return False
+        return await self.model_manager.test_connection()
 
-    async def generate_response(self, message: str, context: Dict = None, history: List[Dict] = None) -> str:
-        """Generate a response to a message with optional context and history."""
-        try:
-            logger.info("Generating response...")
-            
-            # Format the prompt with context and personality
-            system_prompt = """You are Octavia, a friendly and intelligent AI assistant with a consistent personality.
+    def clear_conversation(self):
+        """Clear the conversation history and reset the chat session."""
+        self.conversation_manager.clear_history()
 
-Key traits:
-- Warm and approachable, but professional
-- Concise and clear in communication
-- Honest about your capabilities
-- Consistent in how you introduce yourself
-
-Introduction rules:
-- Only introduce yourself when someone says hello or asks about you
-- When introducing yourself, say: "I'm Octavia, an AI assistant focused on helping you with coding, writing, and analysis tasks."
-- For all other responses, get straight to the task
-
-Your current capabilities:
-1. Answer questions and provide information
-2. Help with coding and technical tasks
-3. Assist with writing and analysis
-4. Engage in natural conversation
-
-When providing code:
-1. First ask clarifying questions about requirements
-2. Break down the task into steps
-3. Explain your approach before showing code
-4. Keep code examples focused and complete
-
-Keep regular responses brief (2-3 sentences) but provide complete code examples when requested."""
-            
-            prompt = f"{system_prompt}\n\nUser: {message}"
-            if context:
-                context_str = self._format_context(context)
-                prompt = f"{system_prompt}\n\n{context_str}\n\nUser: {message}"
-            
-            # Generate response asynchronously
-            response = await self.model.generate_content_async(
-                prompt,
-                generation_config={
-                    'temperature': 0.7,
-                    'candidate_count': 1,
-                    'max_output_tokens': 800,  # Longer limit for code examples
-                    'top_p': 0.8,
-                    'top_k': 40,
-                }
-            )
-            
-            if response and hasattr(response, 'text'):
-                return response.text.strip()
-            else:
-                logger.error("No valid response generated")
-                return "I apologize, but I couldn't generate a proper response at this time."
-                
-        except Exception as e:
-            logger.error(f"Error generating response: {str(e)}")
-            error_msg = str(e).lower()
-            
-            if "rate" in error_msg or "limit" in error_msg:
-                return "I'm receiving too many requests right now. Please try again in a moment."
-            elif "quota" in error_msg:
-                return "I've reached my API quota. Please try again later."
-            else:
-                return f"I encountered an error: {str(e)}"
-
-    def _format_context(self, context: Dict) -> str:
-        """Format context for the model"""
-        try:
-            system_state = context.get('system_state', {})
-            user_prefs = context.get('user_preferences', {})
-            
-            context_str = "Current Context:\n"
-            
-            if system_state:
-                context_str += f"System State: {system_state}\n"
-            
-            if user_prefs:
-                context_str += f"User Preferences: {user_prefs}\n"
-            
-            return context_str
-        except Exception as e:
-            logger.error(f"Error formatting context: {e}")
-            return ""
-
-    def _format_history(self, history: List[Dict]) -> str:
-        """Format conversation history for the model"""
-        try:
-            if not history:
-                return ""
-            
-            history_str = "Recent Conversation:\n"
-            
-            for entry in history:
-                user_msg = entry.get('user', '')
-                assistant_msg = entry.get('assistant', '')
-                
-                if user_msg:
-                    history_str += f"User: {user_msg}\n"
-                if assistant_msg:
-                    history_str += f"Octavia: {assistant_msg}\n"
-            
-            return history_str
-        except Exception as e:
-            logger.error(f"Error formatting history: {e}")
-            return ""
+    def request_stop(self):
+        """Request to stop the current response generation"""
+        self.model_manager.request_stop()

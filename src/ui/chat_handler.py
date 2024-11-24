@@ -2,8 +2,17 @@
 Handles chat interactions in Octavia's UI.
 """
 
-from typing import Optional
+from typing import Optional, Dict
+from dataclasses import dataclass
 from ..memory.ui_integration import UIMemoryBridge
+from ..consciousness.tools.system_tools import run_shell_command
+
+@dataclass
+class CommandResult:
+    command: str
+    success: bool
+    output: Optional[str] = None
+    error: Optional[str] = None
 
 class ChatHandler:
     def __init__(self):
@@ -29,6 +38,12 @@ class ChatHandler:
                 success=command_result.success if command_result else True
             )
 
+            # Format response with command output if available
+            if command_result and command_result.output:
+                response = f"{response}\n\nCommand Output:\n```\n{command_result.output}\n```"
+            elif command_result and command_result.error:
+                response = f"{response}\n\nCommand Error:\n```\n{command_result.error}\n```"
+
             return response
 
         except Exception as e:
@@ -50,7 +65,39 @@ class ChatHandler:
         # Your existing AI response code here
         pass
 
-    async def execute_command(self, response: str):
-        """Execute command from response (your existing code)."""
-        # Your existing command execution code here
-        pass
+    async def execute_command(self, response: str) -> Optional[CommandResult]:
+        """Execute command from response."""
+        try:
+            # Extract command from response (implement command extraction logic)
+            command = self._extract_command(response)
+            if not command:
+                return None
+
+            # Execute command using system_tools
+            result = await run_shell_command(command)
+
+            return CommandResult(
+                command=command,
+                success=result["returncode"] == 0,
+                output=result["stdout"] if result["returncode"] == 0 else None,
+                error=result["stderr"] if result["returncode"] != 0 else None
+            )
+
+        except Exception as e:
+            return CommandResult(
+                command=command if 'command' in locals() else "",
+                success=False,
+                error=str(e)
+            )
+
+    def _extract_command(self, response: str) -> Optional[str]:
+        """Extract command from AI response."""
+        # Look for commands in markdown code blocks
+        if "```" in response:
+            blocks = response.split("```")
+            for i in range(1, len(blocks), 2):
+                if blocks[i].startswith("shell") or blocks[i].startswith("bash"):
+                    return blocks[i].split("\n", 1)[1].strip()
+                elif not any(blocks[i].startswith(lang) for lang in ["python", "javascript", "json"]):
+                    return blocks[i].strip()
+        return None

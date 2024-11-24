@@ -47,12 +47,12 @@ class MainWindow(QMainWindow):
         
         # Initialize state
         self.state = OctaviaState()
-        self.brain = None
+        self.brain = GeminiBrain()  # Initialize without API key
         logger.debug("State initialized")
         
         # For typewriter effect
         self.typewriter_timer = QTimer(self)  # Ensure timer has parent
-        self.typewriter_timer.setInterval(50)  # 50ms between updates (slower)
+        self.typewriter_timer.setInterval(1)  # 1ms between updates (ultra fast)
         self.typewriter_timer.timeout.connect(self._typewriter_update)
         self.current_response = ""
         self.displayed_chars = 0
@@ -94,23 +94,161 @@ class MainWindow(QMainWindow):
         self.text_input.setEnabled(False)
         self.text_input.setPlaceholderText("Enter activation key to start...")
         
+        # Use qasync's event loop
+        self.loop = asyncio.get_event_loop()
+        
         # Create timer for async operations
         self.async_timer = QTimer()
         self.async_timer.timeout.connect(self._process_async)
         self.async_timer.start(10)  # Run every 10ms
-    
+        
+        # Queue for async tasks
+        self.task_queue = []
+
     def _process_async(self):
         """Process pending async operations"""
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                return
-            loop.call_soon(loop.stop)
-            loop.run_forever()
+            if self.task_queue:
+                task = self.task_queue.pop(0)
+                asyncio.create_task(task)
         except Exception as e:
-            print(f"Error in _process_async: {str(e)}")
+            logger.error(f"Error in _process_async: {str(e)}")
             import traceback
-            print(traceback.format_exc())
+            logger.error(traceback.format_exc())
+
+    def _on_api_key_inserted(self, key: str):
+        """Handle API key insertion by scheduling async validation"""
+        logger.info("API key inserted - scheduling validation...")
+        try:
+            # Set the API key directly
+            self.brain.set_api_key(key)
+            
+            # Schedule async validation
+            self.task_queue.append(self._handle_api_key(key))
+            
+        except Exception as e:
+            logger.error(f"Error scheduling API key validation: {str(e)}")
+            self.left_panel.set_api_error("Error validating key - please try again")
+
+    async def _handle_api_key(self, key: str):
+        """Handle API key validation"""
+        logger.info("Attempting API key validation...")
+        try:
+            # Test the API key with a simple query
+            test_response = await self.brain.test_connection()
+            if test_response:
+                logger.info("API key validated successfully")
+                self.text_input.setEnabled(True)
+                self.text_input.setPlaceholderText("Type your message...")
+                self.left_panel.set_api_success()  # Update left panel status only
+            else:
+                logger.error("API key validation failed - invalid key")
+                self.left_panel.set_api_error("Invalid API key")  # Update left panel status
+                
+        except ValueError as e:
+            logger.error(f"API key validation failed - key error: {str(e)}")
+            self.left_panel.set_api_error("Invalid API key format")
+        except Exception as e:
+            logger.error(f"API key validation failed with error: {str(e)}")
+            self.left_panel.set_api_error("Connection error - please try again")
+
+    def _handle_message(self, message: str):
+        """Handle incoming message from text input."""
+        try:
+            # Add user message to chat
+            self.chat_display.add_message(message, is_user=True)
+            
+            # Process message asynchronously
+            self.task_queue.append(self._process_message(message))
+            
+        except Exception as e:
+            logger.error(f"Error in _handle_message: {str(e)}")
+            self.chat_display.add_message(f"Error processing message: {str(e)}", is_user=False)
+            self.text_input.message_processed()
+
+    async def _process_message(self, message: str):
+        """Process a message asynchronously"""
+        logger.info(f"Processing message: {message[:50]}...")  # Log first 50 chars of message
+        try:
+            if not self.brain:
+                logger.error("Brain not initialized - cannot process message")
+                self.chat_display.add_message("Error: Please enter your API key first.", is_user=False)
+                self.text_input.message_processed()
+                return
+
+            logger.debug("Generating response...")
+            response = await self.brain.generate_response(message)
+            if response:
+                logger.info("Response generated successfully")
+                # Start typewriter effect
+                self.current_response = response
+                self.displayed_chars = 0
+                self.typewriter_timer.start()
+                # Don't call message_processed() here - wait for typewriter to finish
+            else:
+                logger.error("No response generated")
+                self.chat_display.add_message("Error: Failed to generate response.", is_user=False)
+                self.text_input.message_processed()
+
+        except Exception as e:
+            logger.error(f"Error processing message: {str(e)}")
+            self.chat_display.add_message(f"Error: {str(e)}", is_user=False)
+            self.text_input.message_processed()
+
+    def _handle_stop(self):
+        """Handle stop request from text input"""
+        logger.info("Stop requested by user")
+        
+        # Stop the typewriter effect first
+        if self.typewriter_timer.isActive():
+            self.typewriter_timer.stop()
+            # Finish the current message with what we have so far
+            self.chat_display.finish_message()
+            
+        # Request stop from brain
+        if self.brain:
+            self.brain.request_stop()
+            
+        # Reset the text input state
+        self.text_input.message_processed()
+        self.current_response = ""
+        self.displayed_chars = 0
+
+    def _typewriter_update(self):
+        """Update typewriter effect"""
+        try:
+            if not self.current_response:
+                logger.debug("No current response to update")
+                self.typewriter_timer.stop()
+                return
+
+            if self.displayed_chars == 0:
+                logger.debug("Creating new message bubble")
+                # Create initial empty message
+                self.chat_display.add_message("", is_user=False)
+
+            # Calculate next chunk of text to display
+            next_char = min(1, len(self.current_response) - self.displayed_chars)
+            if next_char > 0:
+                # Update the current message with more text
+                displayed_text = self.current_response[:self.displayed_chars + next_char]
+                self.chat_display.update_last_message(displayed_text)
+                self.displayed_chars += next_char
+                logger.debug("Updating existing message bubble")
+            else:
+                # Finished displaying all text
+                logger.debug("Typewriter effect complete")
+                self.typewriter_timer.stop()
+                self.current_response = ""
+                self.displayed_chars = 0
+                self._current_bubble = None
+                # Only call message_processed() when typewriter is complete
+                self.text_input.message_processed()
+
+        except Exception as e:
+            logger.error(f"Error in typewriter update: {str(e)}")
+            self.typewriter_timer.stop()
+            self.text_input.message_processed()  # Ensure UI is reset even on error
 
     def _setup_main_content(self):
         """Setup the main content area with welcome message and input"""
@@ -143,126 +281,6 @@ class MainWindow(QMainWindow):
         layout.addWidget(input_container)
         
         return right_panel
-
-    def _on_api_key_inserted(self, key: str):
-        """Handle API key insertion by scheduling async validation"""
-        logger.info("API key inserted - scheduling validation...")
-        loop = asyncio.get_event_loop()
-        loop.create_task(self._handle_api_key(key))
-
-    async def _handle_api_key(self, key: str):
-        """Handle API key validation"""
-        logger.info("Attempting API key validation...")
-        try:
-            # Initialize brain with the API key
-            self.brain = GeminiBrain(key)
-            logger.debug("Brain initialized with API key")
-            
-            # Test the API key with a simple query
-            test_response = await self.brain.test_connection()
-            if test_response:
-                logger.info("API key validated successfully")
-                self.text_input.setEnabled(True)
-                self.text_input.setPlaceholderText("Type your message...")
-                self.left_panel.set_api_success()  # Update left panel status only
-            else:
-                logger.error("API key validation failed - no response from test")
-                self.left_panel.set_api_error("Invalid API key")  # Update left panel status
-                self.brain = None
-                
-        except Exception as e:
-            logger.error(f"API key validation failed with error: {str(e)}")
-            self.left_panel.set_api_error(str(e))  # Update left panel status
-            self.brain = None
-
-    def _handle_message(self, message: str):
-        """Handle incoming message from text input."""
-        try:
-            # Add user message to chat
-            self.chat_display.add_message(message, is_user=True)
-            
-            # Process message asynchronously
-            asyncio.create_task(self._process_message(message))
-            
-        except Exception as e:
-            logger.error(f"Error in _handle_message: {str(e)}")
-            self.chat_display.add_message(f"Error processing message: {str(e)}", is_user=False)
-            self.text_input.message_processed()
-
-    async def _process_message(self, message: str):
-        """Process a message asynchronously"""
-        logger.info(f"Processing message: {message[:50]}...")  # Log first 50 chars of message
-        try:
-            if not self.brain:
-                logger.error("Brain not initialized - cannot process message")
-                self.chat_display.add_message("System not ready. Please enter API key first.", is_user=False)
-                self.text_input.message_processed()  # Re-enable input
-                return
-
-            # Start response generation
-            logger.debug("Generating response...")
-            response = await self.brain.generate_response(message)
-            
-            if response:
-                logger.info("Response generated successfully")
-                # Start typewriter effect
-                self.current_response = response
-                self.displayed_chars = 0
-                self._current_bubble = None  # Reset bubble reference
-                self.typewriter_timer.start()  # Start the timer
-            else:
-                logger.error("No response generated")
-                self.chat_display.add_message("I apologize, but I couldn't generate a proper response at this time.", is_user=False)
-                self.text_input.message_processed()
-
-        except Exception as e:
-            logger.error(f"Error processing message: {str(e)}")
-            self.chat_display.add_message(f"I encountered an error: {str(e)}", is_user=False)
-            self.text_input.message_processed()  # Re-enable input on error
-
-    def _handle_stop(self):
-        """Handle stop request from text input"""
-        if self.typewriter_timer.isActive():
-            self.typewriter_timer.stop()
-            self.chat_display.finish_message()
-            self.text_input.message_processed()
-
-    def _typewriter_update(self):
-        """Update typewriter effect"""
-        try:
-            if not hasattr(self, 'current_response') or not self.current_response:
-                logger.error("No response to display")
-                self.typewriter_timer.stop()
-                return
-
-            if self.displayed_chars < len(self.current_response):
-                # Get next chunk of characters
-                chunk_size = 3  # Display 3 characters at a time
-                next_chars = self.current_response[self.displayed_chars:self.displayed_chars + chunk_size]
-                self.displayed_chars += chunk_size
-                
-                # Update the current message or create new one
-                if not self._current_bubble:
-                    logger.debug("Creating new message bubble")
-                    self._current_bubble = self.chat_display.add_message(next_chars, is_user=False)
-                else:
-                    logger.debug("Updating existing message bubble")
-                    self._current_bubble.update_text(self.current_response[:self.displayed_chars])
-                
-                # Ensure we scroll to see new content
-                self.chat_display._ensure_scrolled_to_bottom()
-            else:
-                logger.debug("Typewriter effect complete")
-                self.typewriter_timer.stop()
-                self._current_bubble = None
-                self.text_input.message_processed()
-
-        except Exception as e:
-            logger.error(f"Error in typewriter update: {str(e)}")
-            self.typewriter_timer.stop()
-            self._current_bubble = None
-            self.text_input.message_processed()
-
 
 async def main():
     """Main entry point for Octavia"""

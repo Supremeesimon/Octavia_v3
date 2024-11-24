@@ -49,24 +49,30 @@ class ChatDisplay(QScrollArea):
             self.layout.takeAt(self.layout.count() - 1)
             
             # Create new message bubble
-            message_bubble = MessageBubble(text, is_user)
-            self.layout.addWidget(message_bubble)
+            bubble = MessageBubble(text, is_user)
+            self.layout.addWidget(bubble)
+            self.current_message_bubble = bubble
             
             # Add stretch back
             self.layout.addStretch()
             
-            # Process events to ensure layout is updated
-            QApplication.processEvents()
-            
             # Scroll to bottom
-            QTimer.singleShot(50, self._ensure_scrolled_to_bottom)
-            
-            # Return the message bubble for updates
-            return message_bubble
+            QTimer.singleShot(100, self._ensure_scrolled_to_bottom)
             
         except Exception as e:
-            logger.error(f"Error adding message to chat: {str(e)}")
-            return None
+            logger.error(f"Error adding message: {str(e)}")
+            
+    def update_last_message(self, text):
+        """Update the text of the last message bubble"""
+        if self.current_message_bubble:
+            self.current_message_bubble.update_text(text)
+            QTimer.singleShot(100, self._ensure_scrolled_to_bottom)
+            
+    def finish_message(self):
+        """Mark the current message as finished"""
+        if self.current_message_bubble:
+            self.current_message_bubble.finish()
+            self.current_message_bubble = None
     
     def append_system_message(self, text):
         """Add a system message (like errors or status updates)"""
