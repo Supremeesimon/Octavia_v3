@@ -99,6 +99,8 @@ class LeftPanel(QWidget):
             self.api_status.show()
             self.status_dot.set_error()  # Start with error state
             self.api_status.setText("Validating...")
+            self.api_key_input.setEnabled(False)  # Disable input during validation
+            self.insert_key_btn.setEnabled(False)  # Disable button during validation
             # Emit the key for validation
             self.api_key_inserted.emit(key)
             
@@ -127,6 +129,7 @@ class LeftPanel(QWidget):
         self.api_key_input.setEnabled(True)
         self.api_key_input.setFocus()
         self.insert_key_btn.show()
+        self.insert_key_btn.setEnabled(True)  # Enable button after validation
         
         # Set status dot to error state
         self.status_dot.set_error()

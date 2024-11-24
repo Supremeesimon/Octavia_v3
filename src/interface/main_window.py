@@ -57,6 +57,7 @@ class MainWindow(QMainWindow):
         self.current_response = ""
         self.displayed_chars = 0
         self._current_bubble = None  # Initialize bubble reference
+        self.chars_per_update = 10  # Display more chars per update for faster display
         logger.debug("Typewriter effect configured")
         
         # Apply styles from external stylesheet
@@ -100,7 +101,7 @@ class MainWindow(QMainWindow):
         # Create timer for async operations
         self.async_timer = QTimer()
         self.async_timer.timeout.connect(self._process_async)
-        self.async_timer.start(10)  # Run every 10ms
+        self.async_timer.start(1)  # Run every 1ms
         
         # Queue for async tasks
         self.task_queue = []
@@ -108,9 +109,11 @@ class MainWindow(QMainWindow):
     def _process_async(self):
         """Process pending async operations"""
         try:
-            if self.task_queue:
-                task = self.task_queue.pop(0)
-                asyncio.create_task(task)
+            # Process up to 5 tasks at once
+            for _ in range(min(5, len(self.task_queue))):
+                if self.task_queue:
+                    task = self.task_queue.pop(0)
+                    asyncio.create_task(task)
         except Exception as e:
             logger.error(f"Error in _process_async: {str(e)}")
             import traceback
@@ -120,36 +123,44 @@ class MainWindow(QMainWindow):
         """Handle API key insertion by scheduling async validation"""
         logger.info("API key inserted - scheduling validation...")
         try:
-            # Set the API key directly
-            self.brain.set_api_key(key)
+            # Update UI to show validation in progress
+            self.text_input.setEnabled(False)
+            self.text_input.setPlaceholderText("Validating API key...")
             
             # Schedule async validation
-            self.task_queue.append(self._handle_api_key(key))
+            asyncio.create_task(self._handle_api_key(key))
             
         except Exception as e:
             logger.error(f"Error scheduling API key validation: {str(e)}")
-            self.left_panel.set_api_error("Error validating key - please try again")
+            self.text_input.setEnabled(False)
+            self.text_input.setPlaceholderText("Error validating key - please try again")
+            self.left_panel.set_api_error("Error validating key")
 
     async def _handle_api_key(self, key: str):
         """Handle API key validation"""
         logger.info("Attempting API key validation...")
         try:
+            # Initialize model with key first
+            self.brain.model_manager._initialize_model(key)
+            
             # Test the API key with a simple query
-            test_response = await self.brain.test_connection()
+            test_response = await self.brain.model_manager.test_connection()
+            
             if test_response:
                 logger.info("API key validated successfully")
                 self.text_input.setEnabled(True)
                 self.text_input.setPlaceholderText("Type your message...")
-                self.left_panel.set_api_success()  # Update left panel status only
+                self.left_panel.set_api_success()
             else:
                 logger.error("API key validation failed - invalid key")
-                self.left_panel.set_api_error("Invalid API key")  # Update left panel status
+                self.text_input.setEnabled(False)
+                self.text_input.setPlaceholderText("Invalid API key - please try again")
+                self.left_panel.set_api_error("Invalid API key")
                 
-        except ValueError as e:
-            logger.error(f"API key validation failed - key error: {str(e)}")
-            self.left_panel.set_api_error("Invalid API key format")
         except Exception as e:
             logger.error(f"API key validation failed with error: {str(e)}")
+            self.text_input.setEnabled(False)
+            self.text_input.setPlaceholderText("Connection error - please try again")
             self.left_panel.set_api_error("Connection error - please try again")
 
     def _handle_message(self, message: str):
@@ -228,28 +239,38 @@ class MainWindow(QMainWindow):
                 self.chat_display.add_message("", is_user=False)
 
             # Calculate next chunk of text to display
-            next_char = min(1, len(self.current_response) - self.displayed_chars)
-            if next_char > 0:
+            remaining = len(self.current_response) - self.displayed_chars
+            next_chars = min(self.chars_per_update, remaining)
+            
+            if next_chars > 0:
                 # Update the current message with more text
-                displayed_text = self.current_response[:self.displayed_chars + next_char]
+                displayed_text = self.current_response[:self.displayed_chars + next_chars]
                 self.chat_display.update_last_message(displayed_text)
-                self.displayed_chars += next_char
-                logger.debug("Updating existing message bubble")
+                self.displayed_chars += next_chars
+                
+                # If this is the last update, finish the message
+                if self.displayed_chars >= len(self.current_response):
+                    logger.debug("Typewriter effect complete")
+                    self.typewriter_timer.stop()
+                    self.chat_display.finish_message()
+                    self.text_input.message_processed()  # Re-enable input
+                    self.current_response = ""
+                    self.displayed_chars = 0
             else:
-                # Finished displaying all text
-                logger.debug("Typewriter effect complete")
+                # No more characters to display
+                logger.debug("No more characters to display")
                 self.typewriter_timer.stop()
+                self.chat_display.finish_message()
+                self.text_input.message_processed()
                 self.current_response = ""
                 self.displayed_chars = 0
-                self._current_bubble = None
-                # Only call message_processed() when typewriter is complete
-                self.text_input.message_processed()
-
+                
         except Exception as e:
             logger.error(f"Error in typewriter update: {str(e)}")
             self.typewriter_timer.stop()
-            self.text_input.message_processed()  # Ensure UI is reset even on error
-
+            self.chat_display.finish_message()
+            self.text_input.message_processed()
+            
     def _setup_main_content(self):
         """Setup the main content area with welcome message and input"""
         right_panel = QWidget()
@@ -273,7 +294,7 @@ class MainWindow(QMainWindow):
         
         # Add text input with stretch
         self.text_input = TextInput()
-        self.text_input.message_sent.connect(self._handle_message)
+        self.text_input.message_sent.connect(self._handle_message)  # Use message_sent instead of message_submitted
         self.text_input.stop_requested.connect(self._handle_stop)
         input_layout.addWidget(self.text_input, 1)  # Add stretch factor
         

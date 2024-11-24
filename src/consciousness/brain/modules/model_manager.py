@@ -7,6 +7,7 @@ from typing import Optional
 import google.generativeai as genai
 from loguru import logger
 from dotenv import load_dotenv
+import asyncio
 
 class ModelManager:
     """Manages the Gemini model configuration and initialization"""
@@ -51,7 +52,7 @@ class ModelManager:
         except Exception as e:
             logger.error(f"Error initializing model: {str(e)}")
             raise
-    
+
     def request_stop(self):
         """Request to stop the current generation"""
         self._stop_requested = True
@@ -64,37 +65,54 @@ class ModelManager:
         """Test the API connection with a simple query"""
         try:
             logger.info("Testing API connection...")
+            if not self.model:
+                raise ValueError("Model not initialized. Please set API key first.")
+                
+            # Use the fastest possible validation
             response = await self.model.generate_content_async(
-                "hello",
+                "test",
                 generation_config={
                     'temperature': 0,
                     'candidate_count': 1,
-                    'max_output_tokens': 1
-                }
+                    'max_output_tokens': 1,
+                    'top_k': 1,
+                    'top_p': 0
+                },
+                safety_settings=[]  # Skip safety checks for validation
             )
-            if response and hasattr(response, 'text'):
-                logger.info("API connection test successful")
-                return True
-            else:
-                logger.error("API response invalid - missing text attribute")
-                return False
+            
+            # Quick validity check
+            return bool(response and hasattr(response, 'text'))
+                
         except Exception as e:
-            logger.error(f"API connection test failed with error: {str(e)}")
-            if "invalid_api_key" in str(e).lower():
-                logger.error("Invalid API key detected")
-            elif "quota" in str(e).lower():
-                logger.error("API quota exceeded")
-            elif "permission" in str(e).lower():
-                logger.error("API permission denied")
+            logger.error(f"Error testing API connection: {str(e)}")
             return False
 
     async def generate_response(self, prompt: str) -> str:
         """Generate a response from the model"""
         try:
+            if not self.model:
+                raise ValueError("Model not initialized. Please set API key first.")
+                
             self._reset_stop()
             
-            # Use non-streaming response if streaming not supported
-            response = await self.model.generate_content_async(prompt)
+            # Create generation config for faster responses
+            generation_config = {
+                'temperature': 0.7,
+                'top_p': 0.9,
+                'top_k': 20,
+                'max_output_tokens': 1024,
+                'candidate_count': 1
+            }
+            
+            # Use async generation with optimized config
+            response = await asyncio.wait_for(
+                self.model.generate_content_async(
+                    prompt,
+                    generation_config=generation_config
+                ),
+                timeout=30.0  # 30 second timeout for long responses
+            )
             
             # Check for stop request immediately after generation
             if self._stop_requested:
@@ -106,6 +124,9 @@ class ModelManager:
             
             return response.text.strip()
             
+        except asyncio.TimeoutError:
+            logger.error("Response generation timed out")
+            return "I apologize, but the response is taking too long. Please try a shorter query."
         except Exception as e:
             logger.error(f"Error generating response: {str(e)}")
             return f"I apologize, but something went wrong: {str(e)}"
