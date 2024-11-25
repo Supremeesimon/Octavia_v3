@@ -10,6 +10,7 @@ from collections import defaultdict
 from datetime import datetime
 import mimetypes
 from loguru import logger
+import time
 
 class SpatialAnalyzer:
     """Analyzes and visualizes filesystem spatial relationships"""
@@ -20,11 +21,23 @@ class SpatialAnalyzer:
         self.relationship_graph = defaultdict(list)
         self.access_patterns = defaultdict(int)
         self.file_clusters = defaultdict(list)
-    
+        self._cache = {}
+        self._cache_timeout = 300  # 5 minutes cache timeout
+        
     def analyze_directory_structure(self, root_path: str) -> Dict[str, Any]:
         """Create a spatial map of directory structure"""
         try:
+            # Check cache first
+            cache_key = f"{root_path}_{int(time.time() / self._cache_timeout)}"
+            if cache_key in self._cache:
+                return self._cache[cache_key]
+            
+            # Quick check if analysis is needed
             root = Path(root_path)
+            if not root.exists():
+                return {}
+                
+            # Do lightweight analysis first
             structure = {
                 "name": root.name,
                 "type": "directory",
@@ -33,32 +46,50 @@ class SpatialAnalyzer:
                 "children": [],
                 "metadata": {
                     "last_modified": datetime.fromtimestamp(root.stat().st_mtime).isoformat(),
-                    "size": sum(f.stat().st_size for f in root.rglob('*') if f.is_file()),
-                    "num_files": len(list(root.rglob('*'))),
                 }
             }
             
-            for item in root.iterdir():
-                if item.is_dir():
-                    structure["children"].append(self.analyze_directory_structure(str(item)))
-                else:
+            # Only do deep analysis for smaller directories
+            dir_size = sum(1 for _ in root.rglob('*'))
+            if dir_size > 1000:  # If directory is too large
+                structure["metadata"]["size"] = "large"
+                structure["metadata"]["num_files"] = dir_size
+                # Only analyze immediate children
+                for item in root.iterdir():
                     structure["children"].append({
                         "name": item.name,
-                        "type": "file",
-                        "path": str(item),
-                        "depth": len(item.parts),
-                        "metadata": {
-                            "last_modified": datetime.fromtimestamp(item.stat().st_mtime).isoformat(),
-                            "size": item.stat().st_size,
-                            "mime_type": mimetypes.guess_type(item.name)[0]
-                        }
+                        "type": "directory" if item.is_dir() else "file",
+                        "path": str(item)
                     })
+            else:
+                # Full analysis for manageable directories
+                structure["metadata"].update({
+                    "size": sum(f.stat().st_size for f in root.rglob('*') if f.is_file()),
+                    "num_files": dir_size
+                })
+                for item in root.iterdir():
+                    if item.is_dir():
+                        structure["children"].append(self.analyze_directory_structure(str(item)))
+                    else:
+                        structure["children"].append({
+                            "name": item.name,
+                            "type": "file",
+                            "path": str(item),
+                            "depth": len(item.parts),
+                            "metadata": {
+                                "last_modified": datetime.fromtimestamp(item.stat().st_mtime).isoformat(),
+                                "size": item.stat().st_size,
+                                "mime_type": mimetypes.guess_type(item.name)[0]
+                            }
+                        })
             
+            # Cache the result
+            self._cache[cache_key] = structure
             return structure
             
         except Exception as e:
-            logger.error(f"Error analyzing directory structure: {str(e)}")
-            return {"error": str(e)}
+            logger.error(f"Error analyzing directory structure: {e}")
+            return {}
     
     def identify_clusters(self, root_path: str) -> Dict[str, List[str]]:
         """Identify clusters of related files based on patterns"""

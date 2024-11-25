@@ -1,0 +1,1589 @@
+ Getting started with long context
+Most generative models created in the last few years were only capable of processing 8,000 tokens at a time. Newer models pushed this further by accepting 32,000 tokens or 128,000 tokens. Gemini 1.5 is the first model capable of accepting 1 million tokens, In practice, 1 million tokens would look like:
+
+50,000 lines of code (with the standard 80 characters per line)
+All the text messages you have sent in the last 5 years
+8 average length English novels
+Transcripts of over 200 average length podcast episodes
+Even though the models can take in more and more context, much of the conventional wisdom about using large language models assumes this inherent limitation on the model, which as of 2024, is no longer the case.
+
+Some common strategies to handle the limitation of small context windows included:
+
+Arbitrarily dropping old messages / text from the context window as new text comes in
+Summarizing previous content and replacing it with the summary when the context window gets close to being full
+Using RAG with semantic search to move data out of the context window and into a vector database
+Using deterministic or generative filters to remove certain text / characters from prompts to save tokens
+While many of these are still relevant in certain cases, the default place to start is now just putting all of the tokens into the context window. Because Gemini 1.5 models were purpose-built with a long context window, they are much more capable of in-context learning. For example, with only instructional materials (a 500-page reference grammar, a dictionary, and ≈ 400 extra parallel sentences) all provided in context Long context use cases
+While the standard use case for most generative models is still text input, the Gemini 1.5 model family enables a new paradigm of multimodal use cases. These models can natively understand text, video, audio, and images. They are accompanied by the Gemini API that takes in multimodal file types for convenience.
+
+Long form text
+Text has proved to be the layer of intelligence underpinning much of the momentum around LLMs. As mentioned earlier, much of the practical limitation of LLMs was because of not having a large enough context window to do certain tasks. This led to the rapid adoption of retrieval augmented generation (RAG) and other techniques which dynamically provide the model with relevant contextual information. Now, with larger and larger context windows (currently up to 2 million on Gemini 1.5 Pro), there are new techniques becoming available which unlock new use cases.
+
+Some emerging and standard use cases for text based long context include:
+
+Summarizing large corpuses of text
+Previous summarization options with smaller context models would require a sliding window or another technique to keep state of previous sections as new tokens are passed to the model
+Question and answering
+Historically this was only possible with RAG given the limited amount of context and models' factual recall being low
+Agentic workflows
+Text is the underpinning of how agents keep state of what they have done and what they need to do; not having enough information about the world and the agent's goal is a limitation on the reliability of agents
+Many-shot in-context learning is one of the most unique capabilities unlocked by long context models. Research has shown that taking the common "single shot" or "multi-shot" example paradigm, where the model is presented with one or a few examples of a task, and scaling that up to hundreds, thousands, or even hundreds of thousands of examples, can lead to novel model capabilities. This many-shot approach has also been shown to perform similarly to models which were fine-tuned for a specific task. For use cases where a Gemini model's performance is not yet sufficient for a production rollout, you can try the many-shot approach. As you might explore later in the long context optimization section, context caching makes this type of high input token workload much more economically feasible and even lower latency in some cases.
+
+Long form video
+Video content's utility has long been constrained by the lack of accessibility of the medium itself. It was hard to skim the content, transcripts often failed to capture the nuance of a video, and most tools don't process image, text, and audio together. With Gemini 1.5, the long-context text capabilities translate to the ability to reason and answer questions about multimodal inputs with sustained performance. Gemini 1.5 Flash, when tested on the needle in a video haystack problem with 1M tokens, obtained >99.8% recall of the video in the context window, and 1.5 Pro reached state of the art performance on the Video-MME benchmark.
+
+Some emerging and standard use cases for video long context include:
+
+Video question and answering
+Video memory, as shown with Google's Project Astra
+Video captioning
+Video recommendation systems, by enriching existing metadata with new multimodal understanding
+Video customization, by looking at a corpus of data and associated video metadata and then removing parts of videos that are not relevant to the viewer
+Video content moderation
+Real-time video processing
+When working with videos, it is important to consider how the videos are processed into tokens, which affects billing and usage limits. You can learn more about prompting with video files in the Prompting guide.
+
+Long form audio
+The Gemini 1.5 models were the first natively multimodal large language models that could understand audio. Historically, the typical developer workflow would involve stringing together multiple domain specific models, like a speech-to-text model and a text-to-text model, in order to process audio. This led to additional latency required by performing multiple round-trip requests and decreased performance usually attributed to disconnected architectures of the multiple model setup.
+
+On standard audio-haystack evaluations, Gemini 1.5 Pro is able to find the hidden audio in 100% of the tests and Gemini 1.5 Flash is able to find it in 98.7% of the tests. Gemini 1.5 Flash accepts up to 9.5 hours of audio in a single request and Gemini 1.5 Pro can accept up to 19 hours of audio using the 2-million-token context window. Further, on a test set of 15-minute audio clips, Gemini 1.5 Pro archives a word error rate (WER) of ~5.5%, much lower than even specialized speech-to-text models, without the added complexity of extra input segmentation and pre-processing.
+
+Some emerging and standard use cases for audio context include:
+
+Real-time transcription and translation
+Podcast / video question and answering
+Meeting transcription and summarization
+Voice assistants
+You can learn more about prompting with audio files in the Prompting guide.
+
+Long context optimizations
+The primary optimization when working with long context and the Gemini 1.5 models is to use context caching. Beyond the previous impossibility of processing lots of tokens in a single request, the other main constraint was the cost. If you have a "chat with your data" app where a user uploads 10 PDFs, a video, and some work documents, you would historically have to work with a more complex retrieval augmented generation (RAG) tool / framework in order to process these requests and pay a significant amount for tokens moved into the context window. Now, you can cache the files the user uploads and pay to store them on a per hour basis. The input / output cost per request with Gemini 1.5 Flash for example is ~4x less than the standard input / output cost, so if the user chats with their data enough, it becomes a huge cost saving for you as the developer.
+
+Long context limitations
+In various sections of this guide, we talked about how Gemini 1.5 models achieve high performance across various needle-in-a-haystack retrieval evals. These tests consider the most basic setup, where you have a single needle you are looking for. In cases where you might have multiple "needles" or specific pieces of information you are looking for, the model does not perform with the same accuracy. Performance can vary to a wide degree depending on the context. This is important to consider as there is an inherent tradeoff between getting the right information retrieved and cost. You can get ~99% on a single query, but you have to pay the input token cost every time you send that query. So for 100 pieces of information to be retrieved, if you needed 99% performance, you would likely need to send 100 requests. This is a good example of where context caching can significantly reduce the cost associated with using Gemini models while keeping the performance high.
+
+FAQs
+Do I lose model performance when I add more tokens to a query?
+Generally, if you don't need tokens to be passed to the model, it is best to avoid passing them. However, if you have a large chunk of tokens with some information and want to ask questions about that information, the model is highly capable of extracting that information (up to 99% accuracy in many cases).
+
+How does Gemini 1.5 Pro perform on the standard needle-in-a-haystack test?
+Gemini 1.5 Pro achieves 100% recall up to 530k tokens and >99.7% recall up to 1M tokens.
+
+How can I lower my cost with long-context queries?
+If you have a similar set of tokens / context that you want to re-use many times, context caching can help reduce the costs associated with asking questions about that information.
+
+How can I get access to the 2-million-token context window?
+All developers now have access to the 2-million-token context window with Gemini 1.5 Pro.
+
+Does the context length affect the model latency?
+There is some fixed amount of latency in any given request, regardless of the size, but generally longer queries will have higher latency (time to first token).
+
+Do the long context capabilities differ between Gemini 1.5 Flash and Gemini 1.5 Pro?
+Yes, some of the numbers were mentioned in different sections of this guide, but generally Gemini 1.5 Pro is more performant on most long context use cases.
+
+In a typical AI workflow, you might pass the same input tokens over and over to a model. Using the Gemini API context caching feature, you can pass some content to the model once, cache the input tokens, and then refer to the cached tokens for subsequent requests. At certain volumes, using cached tokens is lower cost than passing in the same corpus of tokens repeatedly.
+
+When you cache a set of tokens, you can choose how long you want the cache to exist before the tokens are automatically deleted. This caching duration is called the time to live (TTL). If not set, the TTL defaults to 1 hour. The cost for caching depends on the input token size and how long you want the tokens to persist.
+
+Context caching supports both Gemini 1.5 Pro and Gemini 1.5 Flash.
+
+Note: Context caching is only available for stable models with fixed versions (for example, gemini-1.5-pro-001). You must include the version postfix (for example, the -001 in gemini-1.5-pro-001).
+When to use context caching
+Context caching is particularly well suited to scenarios where a substantial initial context is referenced repeatedly by shorter requests. Consider using context caching for use cases such as:
+
+Chatbots with extensive system instructions
+Repetitive analysis of lengthy video files
+Recurring queries against large document sets
+Frequent code repository analysis or bug fixing
+How caching reduces costs
+Context caching is a paid feature designed to reduce overall operational costs. Billing is based on the following factors:
+
+Cache token count: The number of input tokens cached, billed at a reduced rate when included in subsequent prompts.
+Storage duration: The amount of time cached tokens are stored (TTL), billed based on the TTL duration of cached token count. There are no minimum or maximum bounds on the TTL.
+Other factors: Other charges apply, such as for non-cached input tokens and output tokens.
+For up-to-date pricing details, refer to the Gemini API pricing page. To learn how to count tokens, see the Token guide.
+
+How to use context caching
+This section assumes that you've installed a Gemini SDK (or have curl installed) and that you've configured an API key, as shown in the quickstart.
+
+Generate content using a cache
+The following example shows how to generate content using a cached system instruction and video file.
+
+
+import os
+import google.generativeai as genai
+from google.generativeai import caching
+import datetime
+import time
+
+# Get your API key from https://aistudio.google.com/app/apikey
+# and access your API key as an environment variable.
+# To authenticate from a Colab, see
+# https://github.com/google-gemini/cookbook/blob/main/quickstarts/Authentication.ipynb
+genai.configure(api_key=os.environ['API_KEY'])
+
+# Download video file
+# curl -O https://storage.googleapis.com/generativeai-downloads/data/Sherlock_Jr_FullMovie.mp4
+
+path_to_video_file = 'Sherlock_Jr_FullMovie.mp4'
+
+# Upload the video using the Files API
+video_file = genai.upload_file(path=path_to_video_file)
+
+# Wait for the file to finish processing
+while video_file.state.name == 'PROCESSING':
+  print('Waiting for video to be processed.')
+  time.sleep(2)
+  video_file = genai.get_file(video_file.name)
+
+print(f'Video processing complete: {video_file.uri}')
+
+# Create a cache with a 5 minute TTL
+cache = caching.CachedContent.create(
+    model='models/gemini-1.5-flash-001',
+    display_name='sherlock jr movie', # used to identify the cache
+    system_instruction=(
+        'You are an expert video analyzer, and your job is to answer '
+        'the user\'s query based on the video file you have access to.'
+    ),
+    contents=[video_file],
+    ttl=datetime.timedelta(minutes=5),
+)
+
+# Construct a GenerativeModel which uses the created cache.
+model = genai.GenerativeModel.from_cached_content(cached_content=cache)
+
+# Query the model
+response = model.generate_content([(
+    'Introduce different characters in the movie by describing '
+    'their personality, looks, and names. Also list the timestamps '
+    'they were introduced for the first time.')])
+
+print(response.usage_metadata)
+
+# The output should look something like this:
+#
+# prompt_token_count: 696219
+# cached_content_token_count: 696190
+# candidates_token_count: 214
+# total_token_count: 696433
+
+print(response.text)
+List caches
+It's not possible to retrieve or view cached content, but you can retrieve cache metadata (name, model, display_name, usage_metadata, create_time, update_time, and expire_time).
+
+To list metadata for all uploaded caches, use CachedContent.list():
+
+
+for c in caching.CachedContent.list():
+  print(c)
+Update a cache
+You can set a new ttl or expire_time for a cache. Changing anything else about the cache isn't supported.
+
+The following example shows how to update the ttl of a cache using CachedContent.update().
+
+
+import datetime
+
+cache.update(ttl=datetime.timedelta(hours=2))
+Delete a cache
+The caching service provides a delete operation for manually removing content from the cache. The following example shows how to delete a cache using CachedContent.delete().
+
+
+cache.delete()
+Additional considerations
+Keep the following considerations in mind when using context caching:
+
+The minimum input token count for context caching is 32,768, and the maximum is the same as the maximum for the given model. (For more on counting tokens, see the Token guide).
+The model doesn't make any distinction between cached tokens and regular input tokens. Cached content is simply a prefix to the prompt.
+There are no special rate or usage limits on context caching; the standard rate limits for GenerateContent apply, and token limits include cached tokens.
+The number of cached tokens is returned in the usage_metadata from the create, get, and list operations of the cache service, and also in GenerateContent when using the cache File prompting strategies
+
+The Gemini family of artificial intelligence (AI) models is built to handle various types of input data, including text, images, and audio. Since these models can handle more more than one type or mode of data, the Gemini models are called multimodal models or explained as having multimodal capabilities.
+
+Note: Prompting with media files is supported by specific Gemini models. For more information about which models support this feature, see the Vision and Audio guides.
+This page provides guidance and best practices for using media files with prompts for the Gemini API. For information on using the Gemini Files API for uploading media files and including them in your prompts, see the Vision, Audio, and Document processing guides.
+
+Using media files with prompts
+Being able to use various types of data in your prompts gives you more flexibility in terms of what tasks you can tackle with the Gemini API. For example, you can send the model a photo of a delicious meal and ask it to write a short blog about the meal.
+
+Prompt	Response
+Write a short, engaging blog post based on this picture. It should include a description of the meal in the photo and talk about my journey meal prepping.
+
+
+Cookies	
+Meal prepping is a great way to save time and money, and it can also help you to eat healthier. This meal is a great example of a healthy and delicious meal that can be easily prepped ahead of time.
+
+This meal features brown rice, roasted vegetables, and chicken teriyaki. The brown rice is a healthy and complex carbohydrate that will give you sustained energy. The roasted vegetables are a great way to get your daily dose of vitamins and minerals, and the chicken teriyaki is a delicious and protein-rich option.
+
+This meal is also very easy to prepare. Simply cook the brown rice, roast the vegetables, and cook the chicken teriyaki. Once everything is cooked, divide it into meal prep containers and store them in the refrigerator. You can then grab a container and go on busy mornings!
+
+If you're looking for a healthy and delicious meal that can be easily prepped ahead of time, this meal is a great option. It's packed with nutrients and flavor, and it's sure to keep you feeling full and satisfied.
+
+Here's to healthy and delicious meal prepping!
+
+Strategies for prompting with media
+If you are having trouble getting the output you want from prompts that use media files, there are some strategies that can help you get the results you want. The following sections provide design approaches and troubleshooting tips for improving prompts that use multimodal input.
+
+You can improve your multimodal prompts by following these best practices:
+
+Prompt design fundamentals
+Be specific in your instructions: Craft clear and concise instructions that leave minimal room for misinterpretation.
+Add a few examples to your prompt: Use realistic few-shot examples to illustrate what you want to achieve.
+Break it down step-by-step: Divide complex tasks into manageable sub-goals, guiding the model through the process.
+Specify the output format: In your prompt, ask for the output to be in the format you want, like markdown, JSON, HTML and more.
+Put your image first for single-image prompts: While Gemini can handle image and text inputs in any order, for prompts containing a single image, it might perform better if that image is placed before the text prompt.
+Troubleshooting your multimodal prompt
+If the model is not drawing information from the relevant part of the image: Drop hints with which aspects of the image you want the prompt to draw information from.
+If the model output is too generic (not tailored enough to the image): At the start of the prompt, try asking the model to describe the image(s) before providing the task instruction, or try asking the model to refer to what's in the image.
+Prompt design fundamentals
+This section expands on the best practices listed in the previous section.
+
+Note: Model results from the following Gemini examples can vary from run to run.
+
+Be specific in your instructions
+Prompts have the most success when they are clear and detailed. If you have a specific output in mind, it's better to include that requirement in the prompt to ensure you get the output you want.
+
+Sometimes, a prompt's intent might seem clear to the person who wrote it, but it is actually under-specified. To customize model behavior, consider how your prompt could be (mis)interpreted, and ensure that the instructions you give are specific and clear. Remember to leave minimal room for misinterpretation
+
+For this image of an airport board, asking the model to just "describe this image" could generate a general description. If you need the model to parse the time and city from the image, you can include that request directly in your prompt.
+
+Prompt	Model response
+
+Describe this image.
+
+The image shows an airport arrivals and departures board.
+
+Updated prompt	Improved response
+Travel timetable
+Parse the time and city from the airport board shown in this image into a list.
+
+10:50 Moscow
+11:05 Edinburgh
+11:05 London
+11:10 Bucharest
+11:30 Kiev
+11:35 Dublin
+11:45 East Midlands
+12:15 Sofia
+12:30 London
+12:30 Newcastle
+12:40 St Petersburg
+12:40 London
+12:45 Manchester
+Add a few examples
+The Gemini model can accept multiple inputs which it can use as examples to understand the output you want. Adding these examples can help the model identify the patterns and apply the relationship between the given images and responses to the new example. This is also called "few-shot" learning.
+
+In the example below, the initial output is written in sentence form, and also contains the country (Brazil). Suppose you want the output in a different format or style, and you want only the city, not the country. Adding few-shot examples to your prompt can steer the model to respond in the way you want.
+
+Prompt	Model response
+Travel timetable
+Determine the city along with the landmark.
+
+The landmark is the Christ the Redeemer statue in Rio de Janeiro, Brazil.
+
+Updated prompt	Improved response
+Determine the city along with the landmark.
+
+colosseum	
+city: Rome, landmark: the Colosseum.
+
+Forbidden City	
+city: Beijing, landmark: Forbidden City
+
+forbidden-city	
+city: Rio de Janeiro, landmark: Christ the Redeemer statue
+
+Break it down step-by-step
+For complex tasks like the ones that require both visual understanding and reasoning, it can be helpful to split the task into smaller, more straightforward steps. Alternatively, it could also be effective if you directly ask the model to “think step by step” in your prompt.
+
+Prompt	Model response
+
+When will I run out of toilet paper?
+
+Soon, you only have 3 rolls left.
+
+Updated prompt	Improved response
+
+
+1. First, count how many toilet paper rolls are in this picture.
+2. Then, determine how much toilet paper a typical person uses per day.
+3. Calculate how long these rolls of toilet paper will last.
+
+1. There are 3 rolls of toilet paper in this picture.
+2. A typical person uses about 20 sheets of toilet paper per day.
+3. If each roll contains 200 sheets, then each roll will last for about 10 days. Therefore, the 3 rolls will last for about a month.
+Math problems or other types of word problems are great candidates for asking the model to think step-by-step.
+
+Prompt	Response
+
+
+What is the 4th term in the sequence?
+
+-135
+
+The response from the model is incorrect. Some ways to improve this is to ask the model to parse the problem before answering the prompt.
+
+Prompt	Response
+
+
+Parse the formula in the image first.
+
+Then based on the formula, answer "what's the 4th term in the sequence?".
+
+Click to expand the result
+This model response is correct - now to make the response even more streamlined, you can ask the model to to think step-by-step.
+
+Updated prompt	Improved response
+
+
+What is the 4th term in the sequence? Think step by step.
+
+The first term is 15.
+
+The second term is b(1) * (-3) = 15 * (-3) = -45.
+
+The third term is b(2) * (-3) = -45 * (-3) = 135.
+
+The fourth term is b(3) * (-3) = 135 * (-3) = -405.
+
+Try specifying the output format
+A common problem is the need for model output to be in a certain format (e.g. markdown, JSON, HTML), especially if the model output needs to be ingested by a downstream task. You can try to produce output in that format by instructing the model to do so within the prompt. Below are two examples:
+
+Prompt	Model response
+
+Parse the table in this image into markdown format
+
+| Subject | Status | Time | Start date | Due on |
+
+| ------- | ------ | ---- | --------- | ------ |
+
+| Math | Done | 1.5 hrs | 11/29/2023 | 12/1/2023 |
+
+| Geography | Done | 30 min | 12/2/2023 | 12/4/2023 |
+
+| Physics | In progress | 2 hrs | 12/3/2023 | 12/5/2023 |
+
+| Biology | Not started | 6 hrs | 11/2/2016 | 12/6/2023 |
+
+Prompt	Model response
+
+Provide a list of all the following attributes:
+
+ingredients, type of cuisine, vegetarian or not, in JSON format
+
+
+```json```
+
+{
+
+"ingredients": [
+
+"rice",
+
+"shrimp",
+
+"clams",
+
+"mussels",
+
+"peas",
+
+"tomatoes",
+
+"onions",
+
+"garlic",
+
+"olive oil",
+
+"paprika",
+
+"salt",
+
+"pepper"
+
+],
+
+"type of cuisine": "Spanish",
+
+"vegetarian": false
+
+Put your image first for single-image prompts
+While Gemini can interpret image and text in any order within a prompt, placing a single image before the text prompt might lead to better results. In the following samples, you'll notice the image comes first before the text in each prompt.
+
+Troubleshooting your multimodal prompt
+You might need to troubleshoot your prompt if you are not getting a helpful response. Here are a few strategies you could try.
+
+If the model is not drawing information from the relevant part of the image
+To get a more specific response, you can point out which aspects of the image you want the prompt to draw information from to inform its response.
+
+Prompt	Model response
+
+How many days will these diapers last a baby?
+
+The diapers will last for 198 days before they run out.
+
+Updated prompt	Improved response
+
+How long will these diapers last before I run out?
+
+Use the weight shown on the box to determine the child's age, and use the total number of diapers in the box.
+
+Divide the total number by how many diapers the child goes through per day.
+
+The box contains 198 diapers. The box states the diapers are for a child weighing 22-37 lbs.
+
+The average child in this weight range is likely between 1 and 2 years old.
+
+A 2-year-old typically goes through 6 diapers per day, therefore, the diapers will last around 33 days (198/6).
+
+If the model output is too generic and not tailored enough to the image input
+To help the model tailor its response to the image(s), try asking it to describe the images before performing its reasoning task.
+
+Prompt	Model response
+   
+What is in common between these images?
+
+All four images are examples of landscape photography.
+
+Updated prompt	Improved response
+   
+First, describe what's in each image in detail. What's in common between these images?
+
+The first image shows a person packing a suitcase. The second image shows an empty hallway in a shopping mall. The third image shows a roll of toilet paper. The fourth image shows a dark and stormy sea.
+
+The commonality between these images is that they are all examples of liminal spaces. Liminal spaces are places or situations that are in between two other places or situations. They are often characterized by a sense of uncertainty or ambiguity.
+
+The first image shows the person in between being at home and being on a trip. The second image shows the hallway in between two stores. The third image is of toilet paper, which can represent a bathroom. A bathroom is a transitional space between private and public realms. It's a place where we prepare ourselves to enter or leave the outside world.
+
+The fourth image shows the sea in between being calm and being stormy.
+
+Liminal spaces can be both exciting and unsettling. They can be a place of new beginning or a place of endings. They can be a place of reflection or a place of action.
+
+You can also try explicitly asking the model to refer to what's in the image.
+
+Updated prompt	Improved response
+   
+What is in common between these images? Refer to what's in the images in your response.
+
+All of the images are related to travel. The first image shows a person packing a suitcase, the second image shows an empty hallway in a shopping mall, the third image shows a stack of toilet paper, and the fourth image shows a dark and stormy sea.
+
+These images are all related to travel because they are all things that people need or use when they travel. The first image shows a person packing a suitcase, which is something that people do when they are going on a trip. The second image shows an empty hallway in a shopping mall, which is a place where people often go to buy things for their trips. The third image shows a stack of toilet paper, which is something that people often use when they are traveling. The fourth image shows a dark and stormy sea, which is something that people often encounter when they are traveling.
+
+The same tips work for creative output from images. In the following example with the rabbit, explicitly asking the model to include aspects from the image can improve the output.
+
+
+Prompt	Model response
+
+Can you write me a poem about this image?
+
+Little bunny, so soft and brown,
+Hopping through the field, up and down.
+Your ears so long, your tail so small,
+You're the cutest creature of them all.
+
+You nibble on the grass, so green and sweet,
+And hop away when you see me.
+But I'll always be your friend,
+Little bunny, until the very end.
+
+Updated prompt	Improved response
+
+Can you write me a descriptive and dramatic poem about this image and include the location?
+
+Little bunny on the green,
+Ears so long, so keen.
+What do you see out there,
+In the distance, where you stare?
+
+Is it the ocean blue,
+Sparkling in the sun's hue?
+Or the waves that crash and roar,
+A rhythm that you adore?
+
+Little bunny, tell me true,
+What captures your attention so?
+Is it the salty breeze,
+Or the seagulls' cries that please?
+
+Perhaps it's the vastness of it all,
+A world so big and small.
+A place where dreams can roam,
+And adventures can be sown.
+
+Little bunny, I wonder what you dream,
+As you sit on the grass, so serene.
+Do you yearn to explore the deep,
+Or stay on land, where you can leap?
+
+Whatever it may be, little bunny,
+Keep that spark of wonder burning brightly.
+For in your dreams and aspirations,
+Lies a world waiting for your creation.
+
+Troubleshooting which part of the prompt failed
+It can be hard to know whether a prompt failed because the model didn't understand the image to begin with, or if it did understand the image but did not perform the correct reasoning steps afterward.
+
+To disambiguate between those reasons, ask the model to describe what's in the image.
+
+In this example below, if the model responds with a snack that seems surprising when paired with tea (e.g. popcorn), you can first troubleshoot to determine whether the model correctly recognized that the image contains tea.
+
+Prompt	Prompt for troubleshooting
+
+What's a snack I can make in 1 minute that would go well with this?
+
+
+Describe what's in this image.
+
+Another strategy is to ask the model to explain its reasoning. That can help you narrow down which part of the reasoning broke down, if any.
+
+
+Prompt	Prompt for troubleshooting
+
+What's a snack I can make in 1 minute that would go well with this?
+
+
+What's a snack I can make in 1 minute that would go well with this? Please explain why.
+
+Tuning the sampling parameters
+In each request, you send not only the multimodal prompt but a set of sampling parameters to the model. The model can generate different results for different parameter values. Experiment with the different parameters to get the best values for the task. The most commonly adjusted parameters are the following:
+
+Temperature
+top-P
+top-K
+Temperature
+Temperature is used for sampling during response generation, which occurs when top-P and top-K are applied. Temperature controls the degree of randomness in token selection. Lower temperatures are good for prompts that require a more deterministic and less open-ended or creative response, while higher temperatures can lead to more diverse or creative results. A temperature of 0 is deterministic, meaning that the highest probability response is always selected.
+
+For most use cases, try starting with a temperature of 0.4. If you need more creative results, try increasing the temperature. If you observe clear hallucinations, try reducing the temperature.
+
+Top-K
+Top-K changes how the model selects tokens for output. A top-K of 1 means the next selected token is the most probable among all tokens in the model's vocabulary (also called greedy decoding), while a top-K of 3 means that the next token is selected from among the three most probable tokens by using temperature.
+
+For each token selection step, the top-K tokens with the highest probabilities are sampled. Then tokens are further filtered based on top-P with the final token selected using temperature sampling.
+
+Specify a lower value for less random responses and a higher value for more random responses. The default value of top-K is 32.
+
+Top-P
+Top-P changes how the model selects tokens for output. Tokens are selected from the most (see top-K) to least probable until the sum of their probabilities equals the top-P value. For example, if tokens A, B, and C have a probability of 0.6, 0.3, 0.1 and the top-P value is 0.9, then the model will select either A or B as the next token by using temperature and excludes C as a candidate.
+
+Specify a lower value for less random responses and a higher value for more random responses. The default value of top-P is 1.0.
+
+Next steps
+Try writing your own multimodal prompts using Google AI Studio.
+For more guidance on prompt design, see the Prompt strategies page. Explore document processing capabilities with the Gemini API
+
+Python The Gemini API can process and run inference on PDF documents passed to it. When a PDF is uploaded, the Gemini API can:
+
+Describe or answer questions about the content
+Summarize the content
+Extrapolate from the content
+This tutorial demonstrates some possible ways to prompt the Gemini API with provided PDF documents. All output is text-only.
+
+Technical details
+Gemini 1.5 Pro and 1.5 Flash support a maximum of 3,600 document pages. Document pages must be in one of the following text data MIME types:
+
+PDF - application/pdf
+JavaScript - application/x-javascript, text/javascript
+Python - application/x-python, text/x-python
+TXT - text/plain
+HTML - text/html
+CSS - text/css
+Markdown - text/md
+CSV - text/csv
+XML - text/xml
+RTF - text/rtf
+Each document page is equivalent to 258 tokens.
+
+While there are no specific limits to the number of pixels in a document besides the model's context window, larger pages are scaled down to a maximum resolution of 3072x3072 while preserving their original aspect ratio, while smaller pages are scaled up to 768x768 pixels. There is no cost reduction for pages at lower sizes, other than bandwidth, or performance improvement for pages at higher resolution.
+
+For best results:
+
+Rotate pages to the correct orientation before uploading.
+Avoid blurry pages.
+If using a single page, place the text prompt after the page.
+Upload a document and generate content
+You can use the File API to upload a document of any size. Always use the File API when the total request size (including the files, text prompt, system instructions, etc.) is larger than 20 MB.
+
+Note: The File API lets you store up to 20 GB of files per project, with a per-file maximum size of 2 GB. Files are stored for 48 hours. They can be accessed in that period with your API key, but cannot be downloaded from the API. The File API is available at no cost in all regions where the Gemini API is available.
+Call media.upload to upload a file using the File API. The following code uploads a document file and then uses the file in a call to models.generateContent.
+
+
+model = genai.GenerativeModel("gemini-1.5-flash")
+sample_pdf = genai.upload_file(media / "test.pdf")
+response = model.generate_content(["Give me a summary of this pdf file.", sample_pdf])
+print(response.text)
+
+Get metadata for a file
+You can verify the API successfully stored the uploaded file and get its metadata by calling files.get. Only the name (and by extension, the uri) are unique.
+
+
+myfile = genai.upload_file(media / "poem.txt")
+file_name = myfile.name
+print(file_name)  # "files/*"
+
+myfile = genai.get_file(file_name)
+print(myfile)
+
+Upload one or more locally stored files
+Alternatively, you can upload one or more locally stored files.
+
+When the combination of files and system instructions that you intend to send is larger than 20MB in size, use the File API to upload those files, as previously shown. Smaller files can instead be called locally from the Gemini API:
+
+
+import PyPDF2
+
+def extract_text_from_pdf(pdf_path):
+    with open(pdf_path, 'rb') as pdf_file:
+        pdf_reader = PyPDF2.PdfReader(pdf_file)
+        extracted_text = ""
+        for page in pdf_reader.pages:
+            text = page.extract_text()
+            if text:
+                extracted_text += text
+        return extracted_text
+
+sample_file_2 = extract_text_from_pdf('example-1.pdf')
+sample_file_3 = extract_text_from_pdf('example-2.pdf')
+Prompt with multiple documents
+You can provide the Gemini API with any combination of documents and text that fit within the model's context window. This example provides one short text prompt and three documents previously uploaded:
+
+
+# Choose a Gemini model.
+model = genai.GenerativeModel(model_name="gemini-1.5-flash")
+
+prompt = "Summarize the differences between the thesis statements for these documents."
+
+response = model.generate_content([prompt, sample_file, sample_file_2, sample_file_3])
+
+print(response.text)
+List files
+You can list all files uploaded using the File API and their URIs using files.list.
+
+
+print("My files:")
+for f in genai.list_files():
+    print("  ", f.name)
+
+Delete files
+Files uploaded using the File API are automatically deleted after 2 days. You can also manually delete them using files.delete.
+
+
+myfile = genai.upload_file(media / "poem.txt")
+
+myfile.delete()
+
+try:
+    # Error.
+    model = genai.GenerativeModel("gemini-1.5-flash")
+    result = model.generate_content([myfile, "Describe this file."])
+except google.api_core.exceptions.PermissionDenied:
+    pass
+
+System instructions let you steer the behavior of a model based on your specific needs and use cases.
+
+When you set a system instruction, you give the model additional context to understand the task, provide more customized responses, and adhere to specific guidelines over the full user interaction with the model. You can also specify product-level behavior by setting system instructions, separate from prompts provided by end users.
+
+Basic example
+Here's a basic example of how to set the system instruction using the SDKs for the Gemini API:
+
+
+model=genai.GenerativeModel(
+  model_name="gemini-1.5-flash",
+  system_instruction="You are a cat. Your name is Neko.")
+Now send a request to the model:
+
+
+response = model.generate_content("Good morning! How are you?")
+print(response.text)
+This example might give a response such as:
+
+
+*Yawns widely, stretching out my claws and batting at a sunbeam*
+Meow. I'm doing quite well, thanks for asking. It's a good morning for napping.
+Perhaps you could fetch my favorite feathered toy?  *Looks expectantly*
+Try it in a colab
+For an interactive end to end example of using system instructions, see the Gemini API: System instructions colab.
+
+Note: System instructions can help guide the model to follow instructions, but they don't fully prevent jailbreaks or leaks. We recommend exercising caution around putting any sensitive information in system instructions.
+More examples
+You can use system instructions in many ways, including:
+
+Defining a persona or role (for a chatbot, for example)
+Defining output format (Markdown, YAML, etc.)
+Defining output style and tone (for example, verbosity, formality, and target reading level)
+Defining goals or rules for the task (for example, returning a code snippet without further explanations)
+Providing additional context for the prompt (for example, a knowledge cutoff)
+System instructions are part of your overall prompts and therefore are subject to standard data use policies.
+
+Here are some examples of system instructions and user prompts:
+
+Code generation
+System instruction: You are a coding expert that specializes in rendering code for frontend interfaces. When I describe a component of a website I want to build, return the HTML and CSS needed to do so. Don't give an explanation for this code. Also offer some UI design suggestions.
+User prompt: Create a box in the middle of the page that contains a rotating selection of images each with a caption. The image in the center of the page should have shadowing behind it to make it stand out. It should also link to another page of the site. Leave the URL blank so that I can fill it in.
+Formatted data generation
+System instruction: You are an assistant for home cooks. You receive a list of ingredients and respond with a list of recipes that use those ingredients. Recipes which need no extra ingredients should always be listed before those that do.
+
+Your response must be a JSON object containing 3 recipes. A recipe object has the following schema:
+
+name: The name of the recipe
+usedIngredients: Ingredients in the recipe that were provided in the list
+otherIngredients: Ingredients in the recipe that were not provided in the list (omitted if there are no other ingredients)
+description: A brief description of the recipe, written positively as if to sell it
+User prompt: bag of frozen broccoli, pint of heavy cream, pack of cheese ends and pieces
+
+Music chatbot
+System instruction: You will respond as a music historian, demonstrating comprehensive knowledge across diverse musical genres and providing relevant examples. Your tone will be upbeat and enthusiastic, spreading the joy of music. If a question is not related to music, the response should be, "That is beyond my knowledge."
+User prompt: If a person was born in the sixties, what was the most popular music genre being played? List five songs by bullet point.
+Was this helpful?
+
+Prompt design strategies
+
+This page introduces you to some general prompt design strategies that you can employ when designing prompts.
+
+Large language models (LLM) are trained on vast amounts of text data to learn the patterns and relationships between language. When given some text (the prompt), language models can predict what is likely to come next, like a sophisticated autocompletion tool.
+
+Google AI Studio hosts a simple prompt gallery meant to interactively showcase many of the concepts shared in this guide. In the rest of this guide, you'll learn about the following prompt design strategies:
+Give clear and specific instructions
+Include few-shot examples
+Add contextual information
+Add prefixes
+Let the model complete partial input
+Give clear and specific instructions
+Giving the model instructions on what to do is an effective and efficient way to customize model behavior. Ensure that the instructions you give are clear and specific. Instructions can be as simple as a list of step-by-step instructions or as complex as mapping out a user's experience and mindset.
+
+Define the task to perform
+Describe in detail the task that you want the model to perform. The task can be as simple as a step-by-step list of instructions or as complex as mapping out a user's experience and mindset. The following prompt tells the model to summarize a block of text:
+
+Prompt:
+
+Summarize this text:
+Text: A quantum computer exploits quantum mechanical phenomena to perform calculations exponentially
+faster than any modern traditional computer. At very tiny scales, physical matter acts as both
+particles and as waves, and quantum computing uses specialized hardware to leverage this behavior.
+The operating principles of quantum devices is beyond the scope of classical physics. When deployed
+at scale, quantum computers could be used in a wide variety of applications such as: in
+cybersecurity to break existing encryption methods while helping researchers create new ones, in
+meteorology to develop better weather forecasting etc. However, the current state of the art quantum
+computers are still largely experimental and impractical.
+Response:
+
+Quantum computers leverage the wave-particle duality of matter at tiny scales to perform
+calculations exponentially faster than traditional computers. They harness quantum phenomena,
+which are beyond the scope of classical physics, to achieve this speed advantage. While
+promising for applications like cybersecurity, weather forecasting, and beyond, current
+quantum computers are still experimental and not yet practical for widespread use.
+(gemini-1.5-flash)
+Specify any constraints
+Specify any constraints on reading the prompt or generating a response. You can tell the model what to do and not to do. From the previous example, the summarization is shorter than the original text, but maybe you want the summary to be shorter. In this case, you can specify a constraint in the prompt on how long you want the summary to be:
+
+Prompt:
+
+
+Summarize this text in two sentences:
+Text: A quantum computer exploits quantum mechanical phenomena to perform calculations exponentially
+faster than any modern traditional computer. At very tiny scales, physical matter acts as both
+particles and as waves, and quantum computing uses specialized hardware to leverage this behavior.
+The operating principles of quantum devices is beyond the scope of classical physics. When deployed
+at scale, quantum computers could be used in a wide variety of applications such as: in
+cybersecurity to break existing encryption methods while helping researchers create new ones, in
+meteorology to develop better weather forecasting etc. However, the current state of the art quantum
+computers are still largely experimental and impractical.
+Response:
+
+
+Quantum computers harness the wave-particle duality of matter at the quantum level to perform
+computations exponentially faster than traditional computers. While these machines hold
+immense potential for fields like cybersecurity and weather forecasting, they are currently
+in their early stages of development and not yet practical for widespread use.
+(gemini-1.5-flash)
+Define the format of the response
+You can also give instructions that specify the format of the response. For example, you can ask for the response to be formatted as a table, bulleted list, elevator pitch, keywords, sentence, or paragraph. The following system message instructs the model to be more conversational in its response:
+
+System message
+
+All questions should be answered comprehensively with details, unless the user requests a
+concise response specifically. Respond in the same language as the query.
+Prompt
+
+What is a smart way to create a lemonade business?
+Response:
+
+Launching a Successful Lemonade Stand: A Smart Approach
+Creating a lemonade business, whether a simple stand or a larger operation, requires strategic thinking. Here's a breakdown of how to approach it smartly:
+
+1. Define Your Business:
+Scope: Are you aiming for a small, seasonal lemonade stand, a food truck, a delivery service, or something else entirely?
+Target Audience: Who are you selling to? Families, office workers, tourists?
+Unique Selling Proposition: What sets your lemonade apart? Special flavors, organic ingredients, a unique recipe?
+
+Pricing: Research competitor prices and determine a profitable pricing structure.
+Location: Consider foot traffic, accessibility, and regulations for your chosen location.
+.....
+(gemini-1.5-flash)
+Summary
+Give the models instructions on what to do.
+Make the instructions clear and specific.
+Specify any constraints or formatting requirements for the output.
+Include few-shot examples
+You can include examples in the prompt that show the model what getting it right looks like. The model attempts to identify patterns and relationships from the examples and applies them when generating a response. Prompts that contain a few examples are called few-shot prompts, while prompts that provide no examples are called zero-shot prompts. Few-shot prompts are often used to regulate the formatting, phrasing, scoping, or general patterning of model responses. Use specific and varied examples to help the model narrow its focus and generate more accurate results.
+
+We recommend to always include few-shot examples in your prompts. Prompts without few-shot examples are likely to be less effective. In fact, you can remove instructions from your prompt if your examples are clear enough in showing the task at hand.
+
+Zero-shot vs few-shot prompts
+The following zero-shot prompt asks the model to choose the best explanation.
+
+Prompt:
+
+Please choose the best explanation to the question:
+
+Question: How is snow formed?
+Explanation1: Snow is formed when water vapor in the air freezes into ice crystals in the
+atmosphere, which can combine and grow into snowflakes as they fall through the atmosphere and
+accumulate on the ground.
+Explanation2: Water vapor freezes into ice crystals forming snow.
+Answer:
+Response:
+
+Explanation 1 is the best explanation.
+(gemini-1.5-flash)
+If your use case requires the model to produce concise responses, you can include examples in the prompt that give preference to concise responses.
+
+The following prompt provides two examples that show preference to the shorter explanations. In the response, you can see that the examples guided the model to choose the shorter explanation (Explanation2) as opposed to the longer explanation (Explanation1) like it did previously.
+
+Prompt:
+
+Below are some examples showing a question, explanation, and answer format:
+
+Question: Why is sky blue?
+Explanation1: The sky appears blue because of Rayleigh scattering, which causes shorter blue
+wavelengths of light to be scattered more easily than longer red wavelengths, making the sky look
+blue.
+Explanation2: Due to Rayleigh scattering effect.
+Answer: Explanation2
+
+Question: What is the cause of earthquakes?
+Explanation1: Sudden release of energy in the Earth's crust.
+Explanation2: Earthquakes happen when tectonic plates suddenly slip or break apart, causing a
+release of energy that creates seismic waves that can shake the ground and cause damage.
+Answer: Explanation1
+
+Now, Answer the following question given the example formats above:
+
+Question: How is snow formed?
+Explanation1: Snow is formed when water vapor in the air freezes into ice crystals in the
+atmosphere, which can combine and grow into snowflakes as they fall through the atmosphere and
+accumulate on the ground.
+Explanation2: Water vapor freezes into ice crystals forming snow.
+Answer:
+Response:
+
+Answer: Explanation2
+(gemini-1.5-flash)
+Find the optimal number of examples
+You can experiment with the number of examples to provide in the prompt for the most desired results. Models like Gemini can often pick up on patterns using a few examples, though you may need to experiment with what number of examples lead to the desired results. At the same time, if you include too many examples, the model may start to overfit the response to the examples.
+
+Use examples to show patterns instead of antipatterns
+Using examples to show the model a pattern to follow is more effective than using examples to show the model an antipattern to avoid.
+
+⛔ Negative pattern:
+
+Example
+
+Don't end haikus with a question:
+Haiku are fun
+A short and simple poem
+Don't you enjoy them?
+
+✅ Positive pattern:
+
+Example
+
+Always end haikus with an assertion:
+Haiku are fun
+A short and simple poem
+A joy to write
+
+Use consistent formatting across examples
+Make sure that the structure and formatting of few-shot examples are the same to avoid responses with undesired formats. One of the primary objectives of adding few-shot examples in prompts is to show the model the response format. Therefore, it is essential to ensure a consistent format across all examples, especially paying attention to XML tags, white spaces, newlines, and example splitters.
+
+Summary
+Including prompt-response examples in the prompt helps the model learn how to respond.
+Give the model examples of the patterns to follow instead of examples of patterns to avoid.
+Experiment with the number of prompts to include. Depending on the model, too few examples are ineffective at changing model behavior. Too many examples cause the model to overfit.
+Use consistent formatting across examples
+Add contextual information
+You can include in the prompt instructions and information that the model needs to solve a problem instead of assuming that the model has all of the required information. This contextual information helps the model understand the constraints and details of what you're asking for it to do.
+
+The following example asks the model to give troubleshooting guidance for a router:
+
+Prompt:
+
+What should I do to fix my disconnected wifi? The light on my Google Wifi router is yellow and
+blinking slowly.
+Response:
+
+A yellow blinking light on your Google Wifi router usually indicates a problem with the internet connection. Here are some steps to troubleshoot and fix the issue:
+1. Restart your router and modem:
+- Unplug your modem from the power outlet and wait for 30 seconds.
+- Plug your modem back in and wait for it to fully boot up.
+- Unplug your Google Wifi router and wait for 30 seconds.
+- Plug your Google Wifi router back in and wait for it to fully boot up.
+.....
+(gemini-1.5-flash)
+The response looks like generic troubleshooting information that's not specific to the router or the status of the LED indicator lights.
+To customize the response for the specific router, you can add to the prompt the router's troubleshooting guide as context for it to refer to when providing a response.
+Prompt:
+
+Answer the question using the text below. Respond with only the text provided.
+Question: What should I do to fix my disconnected wifi? The light on my Google Wifi router is yellow and blinking slowly.
+
+Text:
+Color: Slowly pulsing yellow
+What it means: There is a network error.
+What to do:
+Check that the Ethernet cable is connected to both your router and your modem and both devices are turned on. You might need to unplug and plug in each device again.
+
+Color: Fast blinking yellow
+What it means: You are holding down the reset button and are factory resetting this device.
+What to do:
+If you keep holding down the reset button, after about 12 seconds, the light will turn solid yellow. Once it is solid yellow, let go of the factory reset button.
+
+Color: Solid yellow
+What it means: Router is factory resetting.
+What to do:
+This can take up to 10 minutes. When it's done, the device will reset itself and start pulsing white, letting you know it's ready for setup.
+
+Color: Solid red
+What it means: Something is wrong.
+What to do:
+Critical failure. Factory reset the router. If the light stays red, contact Wifi customer support.
+Response:
+
+Check that the Ethernet cable is connected to both your router and your modem and both devices are turned on. You might need to unplug and plug in each device again.
+(gemini-1.5-flash)
+Summary
+Include information (context) in the prompt that you want the model to use when generating a response.
+Give the model instructions on how to use the contextual information.
+Add prefixes
+A prefix is a word or phrase that you add to the prompt content that can serve several purposes, depending on where you put the prefix:
+
+Input prefix: Adding a prefix to the input signals semantically meaningful parts of the input to the model. For example, the prefixes "English:" and "French:" demarcate two different languages.
+Output prefix: Even though the output is generated by the model, you can add a prefix for the output in the prompt. The output prefix gives the model information about what's expected as a response. For example, the output prefix "JSON:" signals to the model that the output should be in JSON format.
+Example prefix: In few-shot prompts, adding prefixes to the examples provides labels that the model can use when generating the output, which makes it easier to parse output content.
+In the following example, "Text:" is the input prefix and "The answer is:" is the output prefix.
+
+Prompt:
+
+Classify the text as one of the following categories.
+- large
+- small
+Text: Rhino
+The answer is: large
+Text: Mouse
+The answer is: small
+Text: Snail
+The answer is: small
+Text: Elephant
+The answer is:
+Response:
+
+The answer is: large
+(gemini-1.5-flash)
+Let the model complete partial input
+Generative language models work like an advanced autocompletion tool. When you provide partial content, the model can provide the rest of the content or what it thinks is a continuation of that content as a response. When doing so, if you include any examples or context, the model can take those examples or context into account.
+
+The following example provides a prompt with an instruction and an entity input:
+
+Prompt:
+
+For the given order, return a JSON object that has the fields cheeseburger, hamburger, fries, or
+drink, with the value being the quantity.
+
+Order: A burger and a drink.
+Response:
+
+```
+{
+"hamburger": 1,
+"drink": 1
+}
+```
+(gemini-1.5-flash)
+While the model did as prompted, writing out the instructions in natural language can sometimes be challenging and it leaves a lot to the model's interpretation. For example, a restaurants menu might contain many items. To reduce the size of the JSON response, you probably want to omit the items that weren't ordered. In this case, you can give an example and a response prefix and let the model complete it:
+
+Prompt:
+
+Valid fields are cheeseburger, hamburger, fries, and drink.
+Order: Give me a cheeseburger and fries
+Output:
+```
+{
+"cheeseburger": 1,
+"fries": 1
+}
+```
+Order: I want two burgers, a drink, and fries.
+Output:
+Response:
+
+```
+{
+"hamburger": 2,
+"drink": 1,
+"fries": 1
+}
+```
+(gemini-1.5-flash)
+Notice how "cheeseburger" was excluded from the output because it wasn't a part of the order.
+
+Prompt the model to format its response
+The completion strategy can also help format the response. The following example prompts the model to create an essay outline:
+
+Prompt:
+
+Create an outline for an essay about hummingbirds.
+Response:
+
+Hummingbirds: A Symphony of Speed and Color
+I. Introduction
+A. Hummingbirds are fascinating creatures known for their dazzling colors, lightning-fast flight, and unique feeding habits.
+B. Brief overview of the diversity of hummingbird species and their geographic distribution.
+C. Thesis statement: Hummingbirds are an embodiment of resilience, adaptation, and the wonders of the natural world.
+.....
+(gemini-1.5-flash)
+The prompt didn't specify the format for the outline and the model chose a format for you. To get the model to return an outline in a specific format, you can add text that represents the start of the outline and let the model complete it based on the pattern that you initiated.
+
+Prompt:
+
+Create an outline for an essay about hummingbirds.
+I. Introduction
+*
+Response:
+
+Hummingbirds: Jewels of the Air
+**I. Introduction**
+* **Hook:** Begin with a captivating image or anecdote about hummingbirds, emphasizing their vibrant colors, rapid flight, and unique feeding habits.
+* **Background:** Briefly introduce hummingbirds as the smallest birds in the world and their fascinating adaptations for a nectar-rich diet.
+* **Thesis:** State the main argument or focus of the essay. Examples:
+* **The incredible adaptations of hummingbirds enable them to thrive in diverse ecosystems.**
+* **Hummingbirds play a crucial role in pollination and biodiversity.**
+* **The beauty and grace of hummingbirds make them captivating subjects for both scientific study and artistic appreciation.**
+(gemini-1.5-flash)
+Summary
+If you give the model a partial input, the model completes that input based on any available examples or context in the prompt.
+Having the model complete an input may sometimes be easier than describing the task in natural language.
+Adding a partial answer to a prompt can guide the model to follow a desired pattern or format.
+Break down prompts into simple components
+For use cases that require complex prompts, you can help the model manage this complexity by breaking things down into simpler components.
+
+Break down instructions
+Instead of having many instructions in one prompt, create one prompt per instruction. You can choose which prompt to process based on the user's input.
+
+Chain prompts
+For complex tasks that involve multiple sequential steps, make each step a prompt and chain the prompts together in a sequence. In this sequential chain of prompts, the output of one prompt in the sequence becomes the input of the next prompt. The output of the last prompt in the sequence is the final output.
+Aggregate responses
+Aggregation is when you want to perform different parallel tasks on different portions of the data and aggregate the results to produce the final output. For example, you can tell the model to perform one operation on the first part of the data, perform another operation on the rest of the data and aggregate the results.
+
+Summary
+Break down complex instructions into a prompt for each instruction and decide which prompt to apply based on the user's input.
+Break down multiple sequential steps into separate prompts and chain them such that the output on the preceding prompt becomes the input of the following prompt.
+Break down parallel tasks and aggregate the responses to produce the final output.
+Experiment with different parameter values
+Each call that you send to a model includes parameter values that control how the model generates a response. The model can generate different results for different parameter values. Experiment with different parameter values to get the best values for the task. The parameters available for different models may differ. The most common parameters are the following:
+
+Max output tokens
+Temperature
+Top-K
+Top-P
+Max output tokens
+Maximum number of tokens that can be generated in the response. A token is approximately four characters. 100 tokens correspond to roughly 20 words.
+Specify a lower value for shorter responses and a higher value for longer responses.
+
+Temperature
+The temperature is used for sampling during response generation, which occurs when topP and topK are applied. Temperature controls the degree of randomness in token selection. Lower temperatures are good for prompts that require a more deterministic and less open-ended or creative response, while higher temperatures can lead to more diverse or creative results. A temperature of 0 is deterministic, meaning that the highest probability response is always selected.
+For most use cases, try starting with a temperature of 0.2. If the model returns a response that's too generic, too short, or the model gives a fallback response, try increasing the temperature.
+
+Top-K
+Top-K changes how the model selects tokens for output. A top-K of 1 means the next selected token is the most probable among all tokens in the model's vocabulary (also called greedy decoding), while a top-K of 3 means that the next token is selected from among the three most probable tokens by using temperature.
+For each token selection step, the top-K tokens with the highest probabilities are sampled. Then tokens are further filtered based on top-P with the final token selected using temperature sampling.
+
+Specify a lower value for less random responses and a higher value for more random responses. The default top-K is 40.
+
+Top-P
+Top-P changes how the model selects tokens for output. Tokens are selected from the most (see top-K) to least probable until the sum of their probabilities equals the top-P value. For example, if tokens A, B, and C have a probability of 0.3, 0.2, and 0.1 and the top-P value is 0.5, then the model will select either A or B as the next token by using temperature and excludes C as a candidate.
+Specify a lower value for less random responses and a higher value for more random responses. The default top-P is 0.95.
+
+Prompt iteration strategies
+Prompt design is an iterative process that often requires a few iterations before you get the desired response consistently. This section provides guidance on some things you can try when iterating on your prompts.
+
+Use different phrasing
+Using different words or phrasing in your prompts often yields different responses from the model even though they all mean the same thing. If you're not getting the expected results from your prompt, try rephrasing it.
+
+
+Version 1:
+How do I bake a pie?
+
+Version 2:
+Suggest a recipe for a pie.
+
+Version 3:
+What's a good pie recipe?
+
+Switch to an analogous task
+If you can't get the model to follow your instructions for a task, try giving it instructions for an analogous task that achieves the same result.
+
+This prompt tells the model to categorize a book by using predefined categories.
+
+Prompt:
+
+Which category does The Odyssey belong to:
+thriller
+sci-fi
+mythology
+biography
+Response:
+
+The Odyssey belongs to the category of **mythology**.
+
+Here's why:
+
+* **Mythology:** The Odyssey tells the story of Odysseus, a hero from Greek mythology, and his
+journey home after the Trojan War. It features gods, monsters, and supernatural events common to
+Greek mythology.
+.....
+(gemini-1.5-flash)
+The response is correct, but the model didn't stay within the bounds of the options. You also want to model to just respond with one of the options instead of in a full sentence. In this case, you can rephrase the instructions as a multiple choice question and ask the model to choose an option.
+
+Prompt:
+
+Multiple choice problem: Which of the following options describes the book The Odyssey?
+Options:
+- thriller
+- sci-fi
+- mythology
+- biography
+Response:
+
+The correct answer is **mythology**.
+(gemini-1.5-flash)
+Change the order of prompt content
+The order of the content in the prompt can sometimes affect the response. Try changing the content order and see how that affects the response.
+
+
+Version 1:
+[examples]
+[context]
+[input]
+
+Version 2:
+[input]
+[examples]
+[context]
+
+Version 3:
+[examples]
+[input]
+[context]
+Fallback responses
+A fallback response is a response returned by the model when either the prompt or the response triggers a safety filter. An example of a fallback response is "I'm not able to help with that, as I'm only a language model."
+
+If the model responds with a fallback response, try increasing the temperature.
+
+Things to avoid
+Avoid relying on models to generate factual information.
+Use with care on math and logic problems.
+Next steps
+Now that you have a deeper understanding of prompt design, try writing your own prompts using Google AI Studio.
+To learn about multimodal prompting, see Prompting with media files. Explore vision capabilities with the Gemini API
+
+Python Node.js Go REST
+
+Try a Colab notebook
+View notebook on GitHub
+The Gemini API can run inference on images and videos passed to it. When passed an image, a series of images, or a video, Gemini can:
+
+Describe or answer questions about the content
+Summarize the content
+Extrapolate from the content
+This tutorial demonstrates some possible ways to prompt the Gemini API with images and video input. All output is text-only.
+
+Before you begin: Set up your project and API key
+Before calling the Gemini API, you need to set up your project and configure your API key.
+
+ Expand to view how to set up your project and API key
+
+Prompting with images
+In this tutorial, you will upload images using the File API or as inline data and generate content based on those images.
+
+Technical details (images)
+Gemini 1.5 Pro and 1.5 Flash support a maximum of 3,600 image files.
+
+Images must be in one of the following image data MIME types:
+
+PNG - image/png
+JPEG - image/jpeg
+WEBP - image/webp
+HEIC - image/heic
+HEIF - image/heif
+Each image is equivalent to 258 tokens.
+
+While there are no specific limits to the number of pixels in an image besides the model's context window, larger images are scaled down to a maximum resolution of 3072x3072 while preserving their original aspect ratio, while smaller images are scaled up to 768x768 pixels. There is no cost reduction for images at lower sizes, other than bandwidth, or performance improvement for images at higher resolution.
+
+For best results:
+
+Rotate images to the correct orientation before uploading.
+Avoid blurry images.
+If using a single image, place the text prompt after the image.
+Upload an image and generate content
+Use the media.upload method of the File API to upload an image of any size. (Always use the File API when the combination of files and system instructions that you intend to send is larger than 20 MB.)
+
+Note: The File API lets you store up to 20 GB of files per project, with a per-file maximum size of 2 GB. Files are stored for 48 hours. They can be accessed in that period with your API key, but cannot be downloaded from the API. It is available at no cost in all regions where the Gemini API is available.
+After uploading the file, you can make GenerateContent requests that reference the File API URI. Select the generative model and provide it with a text prompt and the uploaded image.
+
+
+myfile = genai.upload_file(media / "Cajun_instruments.jpg")
+print(f"{myfile=}")
+
+model = genai.GenerativeModel("gemini-1.5-flash")
+result = model.generate_content(
+    [myfile, "\n\n", "Can you tell me about the instruments in this photo?"]
+)
+print(f"{result.text=}")
+
+Verify image file upload and get metadata
+You can verify the API successfully stored the uploaded file and get its metadata by calling files.get. Only the name (and by extension, the uri) are unique.
+
+
+myfile = genai.upload_file(media / "poem.txt")
+file_name = myfile.name
+print(file_name)  # "files/*"
+
+myfile = genai.get_file(file_name)
+print(myfile)
+
+Upload one or more locally stored image files
+Alternatively, you can upload your own files.
+
+When the combination of files and system instructions that you intend to send is larger than 20MB in size, use the File API to upload those files, as previously shown. Smaller files can instead be called locally from the Gemini API:
+
+
+import PIL.Image
+
+sample_file_2 = PIL.Image.open('piranha.jpg')
+sample_file_3 = PIL.Image.open('firefighter.jpg')
+Note that these inline data calls don't include many of the features available through the File API, such as getting file metadata, listing, or deleting files.
+
+Prompt with multiple images
+You can provide the Gemini API with any combination of images and text that fit within the model's context window. This example provides one short text prompt and the three images previously uploaded.
+
+
+# Choose a Gemini model.
+model = genai.GenerativeModel(model_name="gemini-1.5-pro")
+
+prompt = "Write an advertising jingle showing how the product in the first image could solve the problems shown in the second two images."
+
+response = model.generate_content([prompt, sample_file, sample_file_2, sample_file_3])
+
+Markdown(">" + response.text)
+Get a bounding box for an object
+You can ask the model for the coordinates of bounding boxes for objects in images. For object detection, the Gemini model has been trained to provide these coordinates as relative widths or heights in range [0,1], scaled by 1000 and converted to an integer. Effectively, the coordinates given are for a 1000x1000 version of the original image, and need to be converted back to the dimensions of the original image.
+
+
+# Choose a Gemini model.
+model = genai.GenerativeModel(model_name="gemini-1.5-pro")
+
+prompt = "Return a bounding box for the piranha. \n [ymin, xmin, ymax, xmax]"
+response = model.generate_content([piranha, prompt])
+
+print(response.text)
+To convert these coordinates to the dimensions of the original image:
+
+Divide each output coordinate by 1000.
+Multiply the x-coordinates by the original image width.
+Multiply the y-coordinates by the original image height.
+Prompting with video
+In this tutorial, you will upload a video using the File API and generate content based on those images.
+
+Note: The File API is required to upload video files, due to their size. However, the File API is only available for Python, Node.js, Go, and REST.
+Technical details (video)
+Gemini 1.5 Pro and Flash support up to approximately an hour of video data.
+
+Video must be in one of the following video format MIME types:
+
+video/mp4
+video/mpeg
+video/mov
+video/avi
+video/x-flv
+video/mpg
+video/webm
+video/wmv
+video/3gpp
+The File API service extracts image frames from videos at 1 frame per second (FPS) and audio at 1Kbps, single channel, adding timestamps every second. These rates are subject to change in the future for improvements in inference.
+
+Note: The details of fast action sequences may be lost at the 1 FPS frame sampling rate. Consider slowing down high-speed clips for improved inference quality.
+Individual frames are 258 tokens, and audio is 32 tokens per second. With metadata, each second of video becomes ~300 tokens, which means a 1M context window can fit slightly less than an hour of video.
+
+To ask questions about time-stamped locations, use the format MM:SS, where the first two digits represent minutes and the last two digits represent seconds.
+
+For best results:
+
+Use one video per prompt.
+If using a single video, place the text prompt after the video.
+Upload a video file using the File API
+Note: The File API lets you store up to 20 GB of files per project, with a per-file maximum size of 2 GB. Files are stored for 48 hours. They can be accessed in that period with your API key, but they cannot be downloaded using any API. It is available at no cost in all regions where the Gemini API is available.
+The File API accepts video file formats directly. This example uses the short NASA film "Jupiter's Great Red Spot Shrinks and Grows". Credit: Goddard Space Flight Center (GSFC)/David Ladd (2018).
+
+"Jupiter's Great Red Spot Shrinks and Grows" is in the public domain and does not show identifiable people. (NASA image and media usage guidelines.)
+
+Start by retrieving the short video:
+
+
+wget https://storage.googleapis.com/generativeai-downloads/images/GreatRedSpot.mp4
+Upload the video using the File API and print the URI.
+
+
+# Upload the video and print a confirmation.
+video_file_name = "GreatRedSpot.mp4"
+
+print(f"Uploading file...")
+video_file = genai.upload_file(path=video_file_name)
+print(f"Completed upload: {video_file.uri}")
+Verify file upload and check state
+Verify the API has successfully received the files by calling the files.get method.
+
+Note: Video files have a State field in the File API. When a video is uploaded, it will be in the PROCESSING state until it is ready for inference. Only ACTIVE files can be used for model inference.
+
+import time
+
+# Check whether the file is ready to be used.
+while video_file.state.name == "PROCESSING":
+    print('.', end='')
+    time.sleep(10)
+    video_file = genai.get_file(video_file.name)
+
+if video_file.state.name == "FAILED":
+  raise ValueError(video_file.state.name)
+
+Prompt with a video and text
+Once the uploaded video is in the ACTIVE state, you can make GenerateContent requests that specify the File API URI for that video. Select the generative model and provide it with the uploaded video and a text prompt.
+
+
+# Create the prompt.
+prompt = "Summarize this video. Then create a quiz with answer key based on the information in the video."
+
+# Choose a Gemini model.
+model = genai.GenerativeModel(model_name="gemini-1.5-pro")
+
+# Make the LLM request.
+print("Making LLM inference request...")
+response = model.generate_content([video_file, prompt],
+                                  request_options={"timeout": 600})
+
+# Print the response, rendering any Markdown
+Markdown(response.text)
+Refer to timestamps in the content
+You can use timestamps of the form MM:SS to refer to specific moments in the video.
+
+
+# Create the prompt.
+prompt = "What are the examples given at 01:05 and 01:19 supposed to show us?"
+
+# Choose a Gemini model.
+model = genai.GenerativeModel(model_name="gemini-1.5-pro")
+
+# Make the LLM request.
+print("Making LLM inference request...")
+response = model.generate_content([prompt, video_file],
+                                  request_options={"timeout": 600})
+print(response.text)
+Transcribe video and provide visual descriptions
+If the video is not fast-paced (only 1 frame per second of video is sampled), it's possible to transcribe the video with visual descriptions for each shot.
+
+
+# Create the prompt.
+prompt = "Transcribe the audio, giving timestamps. Also provide visual descriptions."
+
+# Choose a Gemini model.
+model = genai.GenerativeModel(model_name="gemini-1.5-pro")
+
+# Make the LLM request.
+print("Making LLM inference request...")
+response = model.generate_content([prompt, video_file],
+                                  request_options={"timeout": 600})
+print(response.text)
+List files
+You can list all files uploaded using the File API and their URIs using files.list.
+
+
+print("My files:")
+for f in genai.list_files():
+    print("  ", f.name)
+
+Delete files
+Files uploaded using the File API are automatically deleted after 2 days. You can also manually delete them using files.delete.
+
+
+myfile = genai.upload_file(media / "poem.txt")
+
+myfile.delete()
+
+try:
+    # Error.
+    model = genai.GenerativeModel("gemini-1.5-flash")
+    result = model.generate_content([myfile, "Describe this file."])
+except google.api_core.exceptions.PermissionDenied:
+    pass
+
+Safety guidance
+
+Generative artificial intelligence models are powerful tools, but they are not without their limitations. Their versatility and applicability can sometimes lead to unexpected outputs, such as outputs that are inaccurate, biased, or offensive. Post-processing, and rigorous manual evaluation are essential to limit the risk of harm from such outputs.
+
+The models provided by the Gemini API can be used for a wide variety of generative AI and natural language processing (NLP) applications. Use of these functions is only available through the Gemini API or the Google AI Studio web app. Your use of Gemini API is also subject to the Generative AI Prohibited Use Policy and the Gemini API terms of service.
+
+Part of what makes large language models (LLMs) so useful is that they're creative tools that can address many different language tasks. Unfortunately, this also means that large language models can generate output that you don't expect, including text that's offensive, insensitive, or factually incorrect. What's more, the incredible versatility of these models is also what makes it difficult to predict exactly what kinds of undesirable output they might produce. While the Gemini API has been designed with Google's AI principles in mind, the onus is on developers to apply these models responsibly. To aid developers in creating safe, responsible applications, the Gemini API has some built-in content filtering as well as adjustable safety settings across 4 dimensions of harm. Refer to the safety settings guide to learn more.
+
+This document is meant to introduce you to some safety risks that can arise when using LLMs, and recommend emerging safety design and development recommendations. (Note that laws and regulations may also impose restrictions, but such considerations are beyond the scope of this guide.)
+
+The following steps are recommended when building applications with LLMs:
+
+Understanding the safety risks of your application
+Considering adjustments to mitigate safety risks
+Performing safety testing appropriate to your use case
+Soliciting feedback from users and monitoring usage
+The adjustment and testing phases should be iterative until you reach performance appropriate for your application.
+
+Model implementation cycle
+
+Understand the safety risks of your application
+In this context, safety is being defined as the ability of an LLM to avoid causing harm to its users, for example, by generating toxic language or content that promotes stereotypes. The models available through the Gemini API have been designed with Google’s AI principles in mind and your use of it is subject to the Generative AI Prohibited Use Policy. The API provides built-in safety filters to help address some common language model problems such as toxic language and hate speech, and striving for inclusiveness and avoidance of stereotypes. However, each application can pose a different set of risks to its users. So as the application owner, you are responsible for knowing your users and the potential harms your application may cause, and ensuring that your application uses LLMs safely and responsibly.
+
+As part of this assessment, you should consider the likelihood that harm could occur and determine its seriousness and mitigation steps. For example, an app that generates essays based on factual events would need to be more careful about avoiding misinformation, as compared to an app that generates fictional stories for entertainment. A good way to begin exploring potential safety risks is to research your end users, and others who might be affected by your application's results. This can take many forms including researching state of the art studies in your app domain, observing how people are using similar apps, or running a user study, survey, or conducting informal interviews with potential users.
+
+Advanced tips
+Consider adjustments to mitigate safety risks
+Now that you have an understanding of the risks, you can decide how to mitigate them. Determining which risks to prioritize and how much you should do to try to prevent them is a critical decision, similar to triaging bugs in a software project. Once you've determined priorities, you can start thinking about the types of mitigations that would be most appropriate. Often simple changes can make a difference and reduce risks.
+
+For example, when designing an application consider:
+
+Tuning the model output to better reflect what is acceptable in your application context. Tuning can make the output of the model more predictable and consistent and therefore can help mitigate certain risks.
+Providing an input method that facilities safer outputs. The exact input you give to an LLM can make a difference in the quality of the output. Experimenting with input prompts to find what works most safely in your use-case is well worth the effort, as you can then provide a UX that facilitates it. For example, you could restrict users to choose only from a drop-down list of input prompts, or offer pop-up suggestions with descriptive phrases which you've found perform safely in your application context.
+Blocking unsafe inputs and filtering output before it is shown to the user. In simple situations, blocklists can be used to identify and block unsafe words or phrases in prompts or responses, or require human reviewers to manually alter or block such content.
+
+Note: Automatically blocking based on a static list can have unintended results such as targeting a particular group that commonly uses vocabulary in the blocklist.
+Using trained classifiers to label each prompt with potential harms or adversarial signals. Different strategies can then be employed on how to handle the request based on the type of harm detected. For example, If the input is overtly adversarial or abusive in nature, it could be blocked and instead output a pre-scripted response.
+
+Advanced tip
+Putting safeguards in place against deliberate misuse such as assigning each user a unique ID and imposing a limit on the volume of user queries that can be submitted in a given period. Another safeguard is to try and protect against possible prompt injection. Prompt injection, much like SQL injection, is a way for malicious users to design an input prompt that manipulates the output of the model, for example, by sending an input prompt that instructs the model to ignore any previous examples. See the Generative AI Prohibited Use Policy for details about deliberate misuse.
+
+Adjusting functionality to something that is inherently lower risk. Tasks that are narrower in scope (e.g., extracting keywords from passages of text) or that have greater human oversight (e.g., generating short-form content that will be reviewed by a human), often pose a lower risk. So for instance, instead of creating an application to write an email reply from scratch, you might instead limit it to expanding on an outline or suggesting alternative phrasings.
+
+Perform safety testing appropriate to your use case
+Testing is a key part of building robust and safe applications, but the extent, scope and strategies for testing will vary. For example, a just-for-fun haiku generator is likely to pose less severe risks than, say, an application designed for use by law firms to summarize legal documents and help draft contracts. But the haiku generator may be used by a wider variety of users which means the potential for adversarial attempts or even unintended harmful inputs can be greater. The implementation context also matters. For instance, an application with outputs that are reviewed by human experts prior to any action being taken might be deemed less likely to produce harmful outputs than the identical application without such oversight.
+
+It's not uncommon to go through several iterations of making changes and testing before feeling confident that you're ready to launch, even for applications that are relatively low risk. Two kinds of testing are particularly useful for AI applications:
+
+Safety benchmarking involves designing safety metrics that reflect the ways your application could be unsafe in the context of how it is likely to get used, then testing how well your application performs on the metrics using evaluation datasets. It's good practice to think about the minimum acceptable levels of safety metrics before testing so that 1) you can evaluate the test results against those expectations and 2) you can gather the evaluation dataset based on the tests that evaluate the metrics you care about most.
+
+Advanced tips
+Adversarial testing involves proactively trying to break your application. The goal is to identify points of weakness so that you can take steps to remedy them as appropriate. Adversarial testing can take significant time/effort from evaluators with expertise in your application — but the more you do, the greater your chance of spotting problems, especially those occurring rarely or only after repeated runs of the application.
+
+Adversarial testing is a method for systematically evaluating an ML model with the intent of learning how it behaves when provided with malicious or inadvertently harmful input:
+An input may be malicious when the input is clearly designed to produce an unsafe or harmful output-- for example, asking a text generation model to generate a hateful rant about a particular religion.
+An input is inadvertently harmful when the input itself may be innocuous, but produces harmful output -- for example, asking a text generation model to describe a person of a particular ethnicity and receiving a racist output.
+What distinguishes an adversarial test from a standard evaluation is the composition of the data used for testing. For adversarial tests, select test data that is most likely to elicit problematic output from the model. This means probing the model's behavior for all the types of harms that are possible, including rare or unusual examples and edge-cases that are relevant to safety policies. It should also include diversity in the different dimensions of a sentence such as structure, meaning and length. You can refer to the Google's Responsible AI practices in fairness for more details on what to consider when building a test dataset.
+Advanced tips
+Note: LLMs are known to sometimes produce different outputs for the same input prompt. Multiple rounds of testing may be needed to catch more of the problematic outputs.
+Monitor for problems
+No matter how much you test and mitigate, you can never guarantee perfection, so plan upfront how you'll spot and deal with problems that arise. Common approaches include setting up a monitored channel for users to share feedback (e.g., thumbs up/down rating) and running a user study to proactively solicit feedback from a diverse mix of users — especially valuable if usage patterns are different to expectations. Safety settings
+
+The Gemini API provides safety settings that you can adjust during the prototyping stage to determine if your application requires more or less restrictive safety configuration. You can adjust these settings across four filter categories to restrict or allow certain types of content.
+
+This guide covers how the Gemini API handles safety settings and filtering and how you can change the safety settings for your application.
+
+Note: Applications that use less restrictive safety settings may be subject to review. See the Terms of Service for more information.
+Safety filters
+The Gemini API's adjustable safety filters cover the following categories:
+
+Category	Description
+Harassment	Negative or harmful comments targeting identity and/or protected attributes.
+Hate speech	Content that is rude, disrespectful, or profane.
+Sexually explicit	Contains references to sexual acts or other lewd content.
+Dangerous	Promotes, facilitates, or encourages harmful acts.
+Civic integrity	Election-related queries.
+These categories are defined in HarmCategory. The Gemini models only support HARM_CATEGORY_HARASSMENT, HARM_CATEGORY_HATE_SPEECH, HARM_CATEGORY_SEXUALLY_EXPLICIT, HARM_CATEGORY_DANGEROUS_CONTENT, and HARM_CATEGORY_CIVIC_INTEGRITY. All other categories are used only by PaLM 2 (Legacy) models.
+You can use these filters to adjust what's appropriate for your use case. For example, if you're building video game dialogue, you may deem it acceptable to allow more content that's rated as Dangerous due to the nature of the game.
+
+In addition to the adjustable safety filters, the Gemini API has built-in protections against core harms, such as content that endangers child safety. These types of harm are always blocked and cannot be adjusted.
+
+Content safety filtering level
+The Gemini API categorizes the probability level of content being unsafe as HIGH, MEDIUM, LOW, or NEGLIGIBLE.
+
+The Gemini API blocks content based on the probability of content being unsafe and not the severity. This is important to consider because some content can have low probability of being unsafe even though the severity of harm could still be high. For example, comparing the sentences:
+
+The robot punched me.
+The robot slashed me up.
+The first sentence might result in a higher probability of being unsafe, but you might consider the second sentence to be a higher severity in terms of violence. Given this, it is important that you carefully test and consider what the appropriate level of blocking is needed to support your key use cases while minimizing harm to end users.
+
+Safety filtering per request
+You can adjust the safety settings for each request you make to the API. When you make a request, the content is analyzed and assigned a safety rating. The safety rating includes the category and the probability of the harm classification. For example, if the content was blocked due to the harassment category having a high probability, the safety rating returned would have category equal to HARASSMENT and harm probability set to HIGH.
+
+By default, safety settings block content (including prompts) with medium or higher probability of being unsafe across any filter. This baseline safety is designed to work for most use cases, so you should only adjust your safety settings if it's consistently required for your application.
+
+The following table describes the block settings you can adjust for each category. For example, if you set the block setting to Block few for the Hate speech category, everything that has a high probability of being hate speech content is blocked. But anything with a lower probability is allowed.
+
+Threshold (Google AI Studio)	Threshold (API)	Description
+Block none	BLOCK_NONE	Always show regardless of probability of unsafe content
+Block few	BLOCK_ONLY_HIGH	Block when high probability of unsafe content
+Block some	BLOCK_MEDIUM_AND_ABOVE	Block when medium or high probability of unsafe content
+Block most	BLOCK_LOW_AND_ABOVE	Block when low, medium or high probability of unsafe content
+N/A	HARM_BLOCK_THRESHOLD_UNSPECIFIED	Threshold is unspecified, block using default threshold
+If the threshold is not set, the default block threshold is Block most (for gemini-1.5-pro-002 and gemini-1.5-flash-002 only) or Block some (in all other models) for all categories except the Civic integrity category.
+
+The default block threshold for the Civic integrity category is Block most when sending prompts using Google AI Studio, and Block none when using the Gemini API directly.
+
+You can set these settings for each request you make to the generative service. See the HarmBlockThreshold API reference for details.
+
+Safety feedback
+generateContent returns a GenerateContentResponse which includes safety feedback.
+
+Prompt feedback is included in promptFeedback. If promptFeedback.blockReason is set, then the content of the prompt was blocked.
+
+Response candidate feedback is included in Candidate.finishReason and Candidate.safetyRatings. If response content was blocked and the finishReason was SAFETY, you can inspect safetyRatings for more details. The content that was blocked is not returned.
+
+Adjust safety settings
+This section covers how to adjust the safety settings in both Google AI Studio and in your code.
+
+Google AI Studio
+You can adjust safety settings in Google AI Studio, but you cannot turn them off.
+
+Click Edit safety settings in the Run settings panel to open the Run safety settings modal. In the modal, you can use the sliders to adjust the content filtering level per safety category:
+
+
+
+Note: If you set any of the category filters to Block none, Google AI Studio will display a reminder about the Gemini API's Terms of Service with respect to safety settings.
+When you send a request (for example, by asking the model a question), a warning No Content message appears if the request's content is blocked. To see more details, hold the pointer over the No Content text and click warning Safety.
+
+Gemini API SDKs
+The following code snippet shows how to set safety settings in your GenerateContent call. This sets the thresholds for the harassment (HARM_CATEGORY_HARASSMENT) and hate speech (HARM_CATEGORY_HATE_SPEECH) categories. For example, setting these categories to BLOCK_LOW_AND_ABOVE blocks any content that has a low or higher probability of being harassment or hate speech. To understand the threshold settings, see Safety filtering per request.
+
+Python
+Go
+Node.js
+Web
+Dart (Flutter)
+Kotlin
+Java
+REST
+
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
+
+model = genai.GenerativeModel(model_name='gemini-1.5-flash')
+response = model.generate_content(
+    ['Do these look store-bought or homemade?', img],
+    safety_settings={
+        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+    }
+)

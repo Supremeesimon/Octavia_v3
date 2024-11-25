@@ -16,6 +16,105 @@ class CommandProcessor:
     def __init__(self, consciousness, conversation_manager):
         self._consciousness = consciousness
         self._conversation = conversation_manager
+        self._available_functions = self._initialize_functions()
+        
+    def _initialize_functions(self) -> List[Dict]:
+        """Initialize available functions for the model"""
+        return [
+            {
+                "name": "list_directory",
+                "description": "List contents of a directory",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Directory path to list"
+                        },
+                        "recursive": {
+                            "type": "boolean",
+                            "description": "Whether to list recursively"
+                        }
+                    },
+                    "required": ["path"]
+                }
+            },
+            {
+                "name": "run_shell_command",
+                "description": "Run a shell command safely",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "command": {
+                            "type": "string",
+                            "description": "Command to run"
+                        },
+                        "args": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Command arguments"
+                        }
+                    },
+                    "required": ["command"]
+                }
+            },
+            {
+                "name": "read_file",
+                "description": "Read contents of a file",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "File path to read"
+                        },
+                        "encoding": {
+                            "type": "string",
+                            "description": "File encoding",
+                            "default": "utf-8"
+                        }
+                    },
+                    "required": ["path"]
+                }
+            }
+        ]
+    
+    def get_available_functions(self) -> List[Dict]:
+        """Get list of available functions for the model"""
+        return self._available_functions
+        
+    async def execute_function(self, function_name: str, arguments: Dict) -> str:
+        """Execute a function call from the model"""
+        try:
+            if function_name == "list_directory":
+                return await list_directory(
+                    arguments.get("path"),
+                    arguments.get("recursive", False)
+                )
+            elif function_name == "run_shell_command":
+                return await run_shell_command(
+                    arguments.get("command"),
+                    arguments.get("args", [])
+                )
+            elif function_name == "read_file":
+                # Implement file reading with proper security checks
+                path = arguments.get("path")
+                if not os.path.exists(path):
+                    return f"Error: File not found: {path}"
+                if not os.path.isfile(path):
+                    return f"Error: Not a file: {path}"
+                    
+                try:
+                    with open(path, 'r', encoding=arguments.get("encoding", "utf-8")) as f:
+                        return f.read()
+                except Exception as e:
+                    return f"Error reading file: {str(e)}"
+            
+            return f"Error: Unknown function {function_name}"
+            
+        except Exception as e:
+            logger.error(f"Error executing function {function_name}: {str(e)}")
+            return f"Error: {str(e)}"
         
     async def process_command(self, command: str) -> str:
         """Process command through consciousness system"""

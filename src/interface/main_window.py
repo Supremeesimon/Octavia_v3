@@ -26,6 +26,9 @@ logger.info("Starting Octavia initialization...")
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from interface.components import WelcomeSection, TextInput, get_global_styles, LeftPanel, ChatDisplay
 from consciousness.brain.gemini_brain import GeminiBrain
+from interface.awareness.ui_observer import UIObserver
+from interface.awareness.ui_awareness import UIAwarenessSystem
+from consciousness.awareness.ui_abilities import UIAbilitiesRegistrar
 
 class OctaviaState:
     """State management for Octavia"""
@@ -40,6 +43,14 @@ class MainWindow(QMainWindow):
         super().__init__()
         logger.info("Initializing MainWindow...")
         
+        # Initialize UI awareness systems
+        self.ui_awareness = UIAwarenessSystem()
+        self.ui_observer = UIObserver(self)
+        self.installEventFilter(self.ui_observer)  # Install event filter
+        
+        # Connect UI observer to awareness system
+        self.ui_observer.interaction_detected.connect(self._handle_ui_interaction)
+        
         # Set up UI
         self.setWindowTitle("Octavia")
         self.resize(1200, 800)
@@ -52,12 +63,12 @@ class MainWindow(QMainWindow):
         
         # For typewriter effect
         self.typewriter_timer = QTimer(self)  # Ensure timer has parent
-        self.typewriter_timer.setInterval(1)  # 1ms between updates (ultra fast)
+        self.typewriter_timer.setInterval(20)  # 20ms between updates (slower)
         self.typewriter_timer.timeout.connect(self._typewriter_update)
         self.current_response = ""
         self.displayed_chars = 0
         self._current_bubble = None  # Initialize bubble reference
-        self.chars_per_update = 10  # Display more chars per update for faster display
+        self.chars_per_update = 3  # Reduced from 10 to 3 chars per update
         logger.debug("Typewriter effect configured")
         
         # Apply styles from external stylesheet
@@ -105,7 +116,10 @@ class MainWindow(QMainWindow):
         
         # Queue for async tasks
         self.task_queue = []
-
+        
+        # Initialize UI abilities after brain is ready
+        self.ui_abilities = None
+        
     def _process_async(self):
         """Process pending async operations"""
         try:
@@ -144,13 +158,16 @@ class MainWindow(QMainWindow):
             self.brain.model_manager._initialize_model(key)
             
             # Test the API key with a simple query
-            test_response = await self.brain.model_manager.test_connection()
-            
-            if test_response:
+            if await self.brain.model_manager.test_connection():
                 logger.info("API key validated successfully")
                 self.text_input.setEnabled(True)
                 self.text_input.setPlaceholderText("Type your message...")
                 self.left_panel.set_api_success()
+                
+                # Initialize UI abilities after brain is ready
+                self.ui_abilities = UIAbilitiesRegistrar(self.brain.abilities)
+                await self.ui_abilities.register_ui_abilities()
+                
             else:
                 logger.error("API key validation failed - invalid key")
                 self.text_input.setEnabled(False)
@@ -162,7 +179,7 @@ class MainWindow(QMainWindow):
             self.text_input.setEnabled(False)
             self.text_input.setPlaceholderText("Connection error - please try again")
             self.left_panel.set_api_error("Connection error - please try again")
-
+            
     def _handle_message(self, message: str):
         """Handle incoming message from text input."""
         try:
@@ -270,6 +287,28 @@ class MainWindow(QMainWindow):
             self.typewriter_timer.stop()
             self.chat_display.finish_message()
             self.text_input.message_processed()
+            
+    def _handle_ui_interaction(self, context: dict):
+        """Handle UI interaction events from observer"""
+        try:
+            # Update UI awareness system
+            self.ui_awareness.update_mouse_context(context)
+            
+            # Get any contextual suggestions
+            suggestions = self.ui_awareness.get_interaction_suggestions()
+            
+            # If we have relevant suggestions and brain is ready
+            if suggestions and self.brain and self.brain.is_ready():
+                # Add to brain's context without interrupting
+                asyncio.create_task(
+                    self.brain.update_interaction_context({
+                        "ui_interaction": context,
+                        "suggestions": suggestions
+                    })
+                )
+                
+        except Exception as e:
+            logger.error(f"Error handling UI interaction: {e}")
             
     def _setup_main_content(self):
         """Setup the main content area with welcome message and input"""

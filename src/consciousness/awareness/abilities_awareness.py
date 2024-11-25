@@ -20,6 +20,7 @@ class AbilityType(Enum):
     COMMUNICATION = "communication" # Abilities to interact and express
     MEMORY = "memory"              # Abilities to store and recall information
     AWARENESS = "awareness"        # Meta-abilities for self-awareness
+    UI = "ui"                      # UI-related abilities
 
 class AbilityStatus(Enum):
     """Status of an ability"""
@@ -27,6 +28,8 @@ class AbilityStatus(Enum):
     INACTIVE = "inactive"       # Present but not currently available
     LEARNING = "learning"       # Still being developed/learned
     DEPRECATED = "deprecated"   # No longer in use
+    SUCCESS = "success"         # Operation completed successfully
+    FAILURE = "failure"         # Operation failed
 
 @dataclass
 class AbilityMetrics:
@@ -94,12 +97,18 @@ class AbilityAwareness:
             
     async def register_ability(self, name: str, description: str,
                              ability_type: AbilityType,
+                             handler: Optional[callable] = None,
                              requirements: Optional[Dict[str, Any]] = None,
                              metadata: Optional[Dict[str, Any]] = None) -> str:
         """Register a new ability"""
         try:
             ability_id = f"ability_{datetime.now().isoformat()}"
             now = datetime.now().isoformat()
+            
+            if metadata is None:
+                metadata = {}
+            if handler:
+                metadata['handler'] = handler.__name__
             
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
@@ -117,7 +126,7 @@ class AbilityAwareness:
                     json.dumps(requirements or {}),
                     now,
                     now,
-                    json.dumps(metadata or {})
+                    json.dumps(metadata)
                 ))
                 
             # Initialize metrics
@@ -128,7 +137,8 @@ class AbilityAwareness:
                 'id': ability_id,
                 'name': name,
                 'type': ability_type,
-                'status': AbilityStatus.ACTIVE
+                'status': AbilityStatus.ACTIVE,
+                'handler': handler
             }
             
             return ability_id

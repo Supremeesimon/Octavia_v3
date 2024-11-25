@@ -2,8 +2,10 @@
 Handles chat interactions in Octavia's UI.
 """
 
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from dataclasses import dataclass
+import os
+import mimetypes
 from ..memory.ui_integration import UIMemoryBridge
 from ..consciousness.tools.system_tools import run_shell_command
 
@@ -14,17 +16,40 @@ class CommandResult:
     output: Optional[str] = None
     error: Optional[str] = None
 
+@dataclass
+class UploadedFile:
+    path: str
+    mime_type: str
+    size: int
+    name: str
+
 class ChatHandler:
     def __init__(self):
         self.memory = UIMemoryBridge()
+        self.upload_dir = os.path.join(os.path.expanduser("~"), ".octavia", "uploads")
+        os.makedirs(self.upload_dir, exist_ok=True)
 
-    async def handle_message(self, message: str):
-        """Handle incoming user message."""
+    async def handle_message(self, message: str, uploaded_files: Optional[List[UploadedFile]] = None):
+        """Handle incoming user message with optional file uploads."""
         try:
+            # Process uploaded files
+            media_files = []
+            if uploaded_files:
+                for file in uploaded_files:
+                    media_files.append({
+                        'path': file.path,
+                        'mime_type': file.mime_type,
+                        'name': file.name
+                    })
+
             # Get context from memory
             context = self.memory.pre_process_message(message)
+            
+            # Add file context
+            if media_files:
+                context['media_files'] = media_files
 
-            # Get AI response (your existing code)
+            # Get AI response with media context
             response = await self.get_ai_response(message, context)
 
             # Execute command if any
@@ -35,7 +60,8 @@ class ChatHandler:
                 message=message,
                 response=response,
                 command=command_result.command if command_result else None,
-                success=command_result.success if command_result else True
+                success=command_result.success if command_result else True,
+                media_files=media_files
             )
 
             # Format response with command output if available
@@ -55,6 +81,30 @@ class ChatHandler:
                 error=str(e)
             )
             raise
+
+    async def handle_file_upload(self, file_data: bytes, filename: str) -> UploadedFile:
+        """Handle file upload from UI."""
+        try:
+            # Generate safe filename
+            safe_filename = os.path.join(self.upload_dir, filename)
+            
+            # Save file
+            with open(safe_filename, 'wb') as f:
+                f.write(file_data)
+                
+            # Get file info
+            mime_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+            size = os.path.getsize(safe_filename)
+            
+            return UploadedFile(
+                path=safe_filename,
+                mime_type=mime_type,
+                size=size,
+                name=filename
+            )
+            
+        except Exception as e:
+            raise Exception(f"Failed to handle file upload: {str(e)}")
 
     def start_new_chat(self):
         """Start a new chat session."""

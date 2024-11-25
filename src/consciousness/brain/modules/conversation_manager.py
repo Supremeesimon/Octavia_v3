@@ -2,33 +2,191 @@
 Conversation management functionality for Octavia's brain.
 """
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 from loguru import logger
+import json
+from datetime import datetime
+from collections import defaultdict
+import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from ...context.context_manager import ContextManager
+
+class ConversationSegment:
+    """Represents a segment of conversation with its importance score"""
+    def __init__(self, messages: List[str], timestamp: datetime):
+        self.messages = messages
+        self.timestamp = timestamp
+        self.importance_score = 1.0
+        self.referenced_count = 0
+        self.key_points = []
+        self.modalities = []  # Track different types of content (text, image, audio, video)
+        
+    def update_importance(self, recent_topics: List[str]):
+        """Update importance based on relevance to recent topics"""
+        if not self.messages:
+            return
+            
+        vectorizer = TfidfVectorizer()
+        try:
+            tfidf_matrix = vectorizer.fit_transform(self.messages + recent_topics)
+            similarity = (tfidf_matrix[:-len(recent_topics)] @ tfidf_matrix[-len(recent_topics):].T).toarray()
+            self.importance_score = float(np.mean(similarity))
+        except:
+            self.importance_score = 0.5
 
 class ConversationManager:
     """Manages conversation history and consciousness-driven responses"""
     
-    def __init__(self, consciousness, max_history_length: int = 15000):
+    def __init__(self, consciousness, max_active_length: int = 1000000):  # Increased to 1M tokens
         self._conversation_history = []
-        self._max_history_length = max_history_length
+        self._max_active_length = max_active_length
         self._consciousness = consciousness
         self._user_style = {
-            'formality': 0.5,  # 0=casual, 1=formal
-            'directness': 0.5,  # 0=indirect, 1=direct
-            'technical': 0.5,   # 0=simple, 1=technical
-            'verbosity': 0.5    # 0=concise, 1=verbose
+            'formality': 0.5,
+            'directness': 0.5,
+            'technical': 0.5,
+            'verbosity': 0.5
         }
-    
-    def add_to_history(self, message: str, response: str):
-        """Add a message-response pair to the conversation history"""
+        self._context_manager = ContextManager()
+        self._conversation_segments = []
+        self._recent_topics = []
+        self._topic_importance = defaultdict(float)
+        self._media_cache = {}  # Cache for multimedia content
+        
+    def add_to_history(self, message: str, response: str, media_content: Optional[Dict] = None):
+        """Add a message-response pair to conversation history with multimedia support"""
+        # Add to immediate history
         self._conversation_history.extend([message, response])
-        if len(self._conversation_history) > self._max_history_length:
-            self._conversation_history = self._conversation_history[-self._max_history_length:]
-    
+        
+        # Handle media content if present
+        if media_content:
+            cache_key = f"media_{len(self._conversation_history)}"
+            self._media_cache[cache_key] = media_content
+            
+        # Extract topics and update importance
+        topics = self._extract_topics(message + " " + response)
+        self._recent_topics = (self._recent_topics + topics)[-20:]  # Increased from 10 to 20
+        
+        for topic in topics:
+            self._topic_importance[topic] += 1
+            
+        # Create new segment
+        segment = ConversationSegment(
+            [message, response],
+            datetime.now()
+        )
+        
+        # Add media types to segment
+        if media_content:
+            segment.modalities.extend(list(media_content.keys()))
+            
+        self._conversation_segments.append(segment)
+            
+        # Update importance scores of all segments
+        for segment in self._conversation_segments:
+            segment.update_importance(self._recent_topics)
+            
+        # Only optimize if we're actually near the limit
+        if len(self._conversation_history) > self._max_active_length * 0.9:
+            self._optimize_memory()
+            
+    def _optimize_memory(self):
+        """Optimize memory while maintaining context integrity"""
+        # Sort segments by importance and recency
+        sorted_segments = sorted(
+            self._conversation_segments,
+            key=lambda s: (s.importance_score * (1 + len(s.modalities) * 0.2), -((datetime.now() - s.timestamp).total_seconds())),
+            reverse=True
+        )
+        
+        # Keep more segments since we have larger context window
+        keep_segments = sorted_segments[:100]  # Increased from 25 to 100
+        summarize_segments = sorted_segments[100:]
+        
+        # Create rich summaries for less important segments
+        summaries = []
+        for segment in summarize_segments:
+            summary = self._create_rich_segment_summary(segment)
+            if summary:
+                summaries.append(summary)
+                
+        # Store summaries in persistent storage
+        self._store_summaries(summaries)
+        
+        # Rebuild conversation history
+        self._conversation_history = []
+        for segment in keep_segments:
+            self._conversation_history.extend(segment.messages)
+            
+        # Add recent messages
+        recent_messages = self._conversation_history[-2000:]  # Keep last 2000 messages
+        self._conversation_history = recent_messages
+        
+    def _extract_topics(self, text: str) -> List[str]:
+        """Extract key topics from text using TF-IDF"""
+        try:
+            vectorizer = TfidfVectorizer(
+                max_features=10,
+                stop_words='english',
+                ngram_range=(1, 2)
+            )
+            tfidf_matrix = vectorizer.fit_transform([text])
+            feature_names = vectorizer.get_feature_names_out()
+            return list(feature_names)
+        except:
+            return []
+            
+    def _create_rich_segment_summary(self, segment: ConversationSegment) -> Optional[Dict]:
+        """Create a rich summary of a conversation segment"""
+        if not segment.messages:
+            return None
+            
+        return {
+            'timestamp': segment.timestamp.isoformat(),
+            'importance': segment.importance_score,
+            'topics': self._extract_topics(" ".join(segment.messages)),
+            'key_points': segment.key_points,
+            'messages': segment.messages,
+            'modalities': segment.modalities
+        }
+        
+    def _store_summaries(self, summaries: List[Dict]):
+        """Store conversation summaries in persistent storage"""
+        if not summaries:
+            return
+            
+        try:
+            self._context_manager.store_conversation_summaries(summaries)
+        except Exception as e:
+            logger.error(f"Error storing summaries: {e}")
+            
+    def get_relevant_context(self, current_topic: str) -> List[str]:
+        """Get relevant historical context based on current topic"""
+        relevant_messages = []
+        
+        # Check active segments
+        for segment in self._conversation_segments:
+            if any(topic in current_topic.lower() for topic in self._extract_topics(" ".join(segment.messages))):
+                relevant_messages.extend(segment.messages)
+                
+        # Check stored summaries
+        try:
+            historical_context = self._context_manager.get_relevant_summaries(current_topic)
+            for context in historical_context:
+                relevant_messages.extend(context.get('messages', []))
+        except Exception as e:
+            logger.error(f"Error getting historical context: {e}")
+            
+        return relevant_messages
+
     def clear_history(self):
         """Clear the conversation history"""
         self._conversation_history = []
-    
+        self._conversation_segments = []
+        self._recent_topics = []
+        self._topic_importance = defaultdict(float)
+        self._context_manager.clear_conversation_summaries()
+
     def update_user_style(self, message: str):
         """Analyze and update user's communication style"""
         # Update style based on message characteristics
