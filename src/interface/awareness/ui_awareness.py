@@ -68,27 +68,29 @@ class UIAwarenessSystem:
         """Get a registered ability by name"""
         return self._abilities.get(name)
             
-    def update_mouse_context(self, context: Dict[str, Any]) -> None:
-        """Update current mouse context"""
+    def update_mouse_context(self, context: dict):
+        """Update mouse context information"""
         try:
-            self.mouse_context = MouseContext(
-                position=context["position"],
-                widget_type=context["widget_type"],
-                widget_area=context["widget_area"],
-                hovering_message=context["hovering_message"],
-                near_input=context["near_input"],
-                last_interaction=datetime.now()
-            )
-            
-            # Track hover duration if position hasn't changed significantly
-            if self._is_similar_position(context["position"]):
-                self.mouse_context.hover_duration += 0.1  # 100ms update interval
-            else:
-                self.mouse_context.hover_duration = 0.0
+            if not isinstance(context, dict):
+                logger.warning(f"Invalid context type: {type(context)}")
+                return
                 
-            # Log significant hover events
-            if self.mouse_context.hover_duration > 2.0:  # 2 seconds
-                self._log_hover_pattern()
+            # Extract mouse position if available
+            mouse_pos = context.get('mouse_position', {})
+            if isinstance(mouse_pos, dict):
+                x = mouse_pos.get('x', 0)
+                y = mouse_pos.get('y', 0)
+                self.mouse_context = MouseContext(
+                    position=QPoint(x, y),
+                    widget_type=context.get("widget_type", "unknown"),
+                    widget_area=context.get("widget_area", "unknown"),
+                    hovering_message=context.get("hovering_message", False),
+                    near_input=context.get("near_input", False),
+                    last_interaction=datetime.now(),
+                    hover_duration=0.0
+                )
+            else:
+                logger.warning(f"Invalid mouse_position type: {type(mouse_pos)}")
                 
         except Exception as e:
             logger.error(f"Error updating mouse context: {e}")

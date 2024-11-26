@@ -8,8 +8,7 @@ import os
 import sys
 import asyncio
 import logging
-from qasync import QEventLoop
-from PySide6.QtWidgets import QApplication
+from qasync import QEventLoop, QApplication
 from loguru import logger
 from src.interface.main_window import MainWindow
 
@@ -24,29 +23,35 @@ logger.add(os.path.join(log_dir, 'octavia.log'), rotation="1 day", retention="7 
 
 logger = logger.bind(name="OctaviaRunner")
 
+async def init_window():
+    """Initialize the main window and its async components"""
+    window = MainWindow()
+    await window.initialize()
+    window.show()
+    return window
+
 def main():
     """Main entry point for Octavia"""
     try:
         logger.info("Starting Octavia...")
         
         # Create application instance
-        app = QApplication(sys.argv)
+        app = QApplication.instance()
+        if not app:
+            app = QApplication(sys.argv)
         
         # Create event loop
         loop = QEventLoop(app)
         asyncio.set_event_loop(loop)
         
-        # Create and show main window
-        window = MainWindow()
-        window.show()
-        
-        # Enter event loop
+        # Initialize and show main window
         with loop:
+            window = loop.run_until_complete(init_window())
             loop.run_forever()
             
     except Exception as e:
         logger.error(f"Error starting Octavia: {str(e)}")
-        sys.exit(1)
+        raise
 
 if __name__ == "__main__":
     main()

@@ -3,14 +3,15 @@ Model management functionality for Octavia's brain.
 """
 
 import os
-from typing import Optional, Dict, List, Union, Callable
-import google.generativeai as genai
+from typing import Dict, List, Optional, Union, Callable
 from loguru import logger
-from dotenv import load_dotenv
 import asyncio
+import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
+from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import json
+import traceback
 
 class ModelManager:
     """Manages the Gemini model configuration and initialization"""
@@ -61,8 +62,9 @@ class ModelManager:
             }
         }
         
+        # Initialize model immediately if API key provided
         if api_key:
-            self._initialize_model(api_key)
+            self.initialize_model_sync()
             
     def register_ability(self, name: str, handler: Callable):
         """Register a new ability handler"""
@@ -160,37 +162,57 @@ For complex tasks (coding, debugging):
         return base_prompt
 
     async def validate_api_key(self, api_key: str) -> bool:
-        """Validate the API key by attempting to initialize the model"""
+        """Validate the API key"""
         try:
-            # Configure API key
-            genai.configure(api_key=api_key)
-            
-            # Configure model with appropriate safety settings
-            model = genai.GenerativeModel('gemini-pro', 
-                safety_settings={
-                    HarmCategory.HARASSMENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                    HarmCategory.HATE_SPEECH: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                    HarmCategory.SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                    HarmCategory.DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE
-                }
-            )
-            
-            # Test with minimal prompt
-            response = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: model.generate_content("Hi")
-            )
-            
-            if response:
-                self.model = model
-                logger.info("Successfully initialized Gemini model")
-                return True
-                
-            return False
-            
+            self.api_key = api_key
+            await self.initialize_model()
+            return True
         except Exception as e:
             logger.error(f"API key validation failed: {e}")
             return False
+
+    async def initialize_model(self):
+        """Initialize the model with API key"""
+        try:
+            if not self.api_key:
+                raise ValueError("API key not set")
+                
+            logger.debug("Configuring Gemini with API key...")
+            # Configure Gemini with API key
+            genai.configure(api_key=self.api_key)
+            
+            logger.debug("Setting up safety settings...")
+            # Configure model with safety settings
+            safety_settings = {
+                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_ONLY_HIGH
+            }
+            
+            logger.debug("Creating model instance...")
+            # Create model instance
+            self.model = genai.GenerativeModel('gemini-pro',
+                                         safety_settings=safety_settings)
+            
+            logger.debug("Testing connection...")
+            # Test connection with simple query
+            response = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self.model.generate_content("Hi", generation_config={"temperature": 0})
+            )
+            
+            logger.debug(f"Test response: {response}")
+            
+            if not response:
+                raise ValueError("Model initialization test failed")
+                
+            logger.info("Model initialized successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error initializing model: {str(e)}\n{traceback.format_exc()}")
+            raise
             
     async def generate_response(self, message: str, context: Optional[dict] = None, functions: Optional[List[Dict]] = None) -> Union[str, Dict]:
         """Generate a response using the model"""
@@ -243,29 +265,17 @@ For complex tasks (coding, debugging):
             logger.error(f"Error generating response: {e}")
             raise
 
-    async def initialize_model(self):
-        """Initialize the model with API key"""
+    def initialize_model_sync(self):
+        """Initialize model synchronously"""
         try:
             genai.configure(api_key=self.api_key)
-            
-            # Configure model with safety settings
-            safety_settings = {
-                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_ONLY_HIGH
-            }
-            
-            self.model = genai.GenerativeModel('gemini-pro',
-                                             safety_settings=safety_settings)
-            
+            self.model = genai.GenerativeModel('gemini-1.5-pro')
+            self._api_key = self.api_key
             logger.info("Model initialized successfully")
-            return True
-            
         except Exception as e:
-            logger.error(f"Error initializing model: {str(e)}")
+            logger.error(f"Failed to initialize model: {e}")
             raise
-            
+
     def _initialize_model(self, api_key: Optional[str] = None):
         """Initialize the Gemini model with configuration"""
         try:

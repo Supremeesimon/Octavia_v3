@@ -1,16 +1,29 @@
 # Core Intelligence
 google-generativeai>=0.3.2  # Gemini Flash API integration
 vertexai>=0.0.1            # Vertex AI helper
+scikit-learn>=1.4.1.post1  # Machine learning utilities
 
 # System Integration
 pyobjc-framework-Cocoa>=9.2; platform_system == 'Darwin'  # macOS integration
+pyobjc-framework-Quartz>=9.2; platform_system == 'Darwin'  # Additional macOS features
+psutil>=5.9.8             # System monitoring and process management
 
 # User Interface
-PySide6>=6.6.0           # Modern UI framework
+PySide6>=6.8.0           # Modern UI framework
 qt-material>=2.14        # Material Design theme
 qasync>=0.24.1          # Async support for Qt
+markdown>=3.5.2         # Markdown processing for chat messages
 
 # Utilities
 python-dotenv>=1.0.0     # Environment variable management
 loguru>=0.7.2           # Logging
 aiohttp>=3.9.1          # Async HTTP client
+typing-extensions>=4.9.0 # Type hinting support
+sqlalchemy>=2.0.25      # Database ORM
+
+# Development
+black>=24.1.1           # Code formatting
+pylint>=3.0.3           # Code linting
+pytest>=8.0.0           # Testing
+pytest-asyncio>=0.23.5  # Async testing support
+pytest-qt>=4.2.0        # Qt testing support

@@ -5,7 +5,11 @@ Left panel component for Octavia
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, 
                              QLabel, QLineEdit, QHBoxLayout)
 from PySide6.QtCore import Qt, Signal
+import asyncio
+import logging
 from .status_dot import PulsingDot
+
+logger = logging.getLogger(__name__)
 
 class LeftPanel(QWidget):
     """Left panel component"""
@@ -38,12 +42,12 @@ class LeftPanel(QWidget):
         self.api_key_input.setObjectName("apiKeyInput")
         self.api_key_input.setPlaceholderText("Enter activation key...")
         self.api_key_input.setEchoMode(QLineEdit.Password)
-        self.api_key_input.returnPressed.connect(self._handle_key_insert)  # Add Enter key handler
+        self.api_key_input.returnPressed.connect(self._handle_api_key_submit)  # Add Enter key handler
         layout.addWidget(self.api_key_input)
         
         self.insert_key_btn = QPushButton("Insert")
         self.insert_key_btn.setObjectName("insertKeyButton")
-        self.insert_key_btn.clicked.connect(self._handle_key_insert)
+        self.insert_key_btn.clicked.connect(self._handle_api_key_submit)
         layout.addWidget(self.insert_key_btn)
         
         # Status section with dot and text
@@ -90,20 +94,22 @@ class LeftPanel(QWidget):
         self.api_status.hide()
         self.status_dot.hide()
         
-    def _handle_key_insert(self):
-        """Handle API key insertion"""
+    def _handle_api_key_submit(self):
+        """Handle API key submission"""
         key = self.api_key_input.text().strip()
         if key:
-            # Show status elements before emitting
-            self.status_dot.show()
-            self.api_status.show()
-            self.status_dot.set_error()  # Start with error state
-            self.api_status.setText("Validating...")
-            self.api_key_input.setEnabled(False)  # Disable input during validation
-            self.insert_key_btn.setEnabled(False)  # Disable button during validation
-            # Emit the key for validation
-            self.api_key_inserted.emit(key)
+            logger.info("API key submitted")
+            # Show loading state
+            self.set_loading_state(True)
             
+            # Emit the key directly
+            self.api_key_inserted.emit(key)
+            self.api_key_input.clear()
+
+    async def _emit_api_key(self, key: str):
+        """Emit API key asynchronously"""
+        self.api_key_inserted.emit(key)
+
     def set_api_success(self):
         """Show API key success state"""
         # Update UI elements
@@ -146,3 +152,30 @@ class LeftPanel(QWidget):
         # Show status elements
         self.status_dot.show()
         self.api_status.show()
+
+    def set_loading_state(self, is_loading: bool):
+        """Set loading state of API key input"""
+        if is_loading:
+            self.status_dot.show()
+            self.api_status.show()
+            self.status_dot.set_error()
+            self.api_status.setText("Validating...")
+            self.api_key_input.setEnabled(False)
+            self.insert_key_btn.setEnabled(False)
+        else:
+            self.api_key_input.setEnabled(True)
+            self.insert_key_btn.setEnabled(True)
+            
+    def show_error_message(self, message: str):
+        """Show error message in status"""
+        self.status_dot.set_error()
+        self.api_status.setText(message)
+        self.api_status.show()
+        self.status_dot.show()
+        
+    def show_success_message(self, message: str):
+        """Show success message in status"""
+        self.status_dot.set_success()
+        self.api_status.setText(message)
+        self.api_status.show()
+        self.status_dot.show()

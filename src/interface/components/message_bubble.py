@@ -137,7 +137,19 @@ class MessageBubble(QFrame):
     def update_text(self, text):
         """Update the message text"""
         self.raw_text = text
-        html_text = markdown.markdown(text, extensions=['nl2br'])
+        
+        # Convert markdown to HTML with code highlighting
+        html_text = markdown.markdown(
+            text,
+            extensions=[
+                'nl2br',  # Convert newlines to <br>
+                'fenced_code',  # Support code blocks
+                'tables',  # Support tables
+                'sane_lists',  # Better list handling
+            ]
+        )
+        
+        # Apply syntax highlighting CSS
         self.label.setText(html_text)
         self.label.adjustSize()
         

@@ -32,43 +32,40 @@ class UIAbilitiesRegistrar:
             
         except Exception as e:
             logger.error(f"Error registering UI abilities: {e}")
+            raise
             
     async def _register_window_management(self):
         """Register window management abilities"""
-        await self.ability_awareness.register_ability(
-            name="Window Management",
-            ability_type=AbilityType.UI,
-            description="Manages window state and layout",
-            handler=self._handle_window_management
+        self.ability_awareness.register_ability(
+            ability_name="window_management",
+            handler=self._handle_window_management,
+            description="Manages window state and layout"
         )
-            
+        
     async def _register_layout_abilities(self):
-        """Register layout adaptation abilities"""
-        await self.ability_awareness.register_ability(
-            name="Layout Adaptation",
-            ability_type=AbilityType.UI,
-            description="Adapts UI layout based on context",
-            handler=self._handle_layout_adaptation
+        """Register layout management abilities"""
+        self.ability_awareness.register_ability(
+            ability_name="layout_management", 
+            handler=self._handle_layout_management,
+            description="Controls UI layout and components"
         )
-            
+        
     async def _register_interaction_awareness(self):
         """Register interaction awareness abilities"""
-        await self.ability_awareness.register_ability(
-            name="Interaction Context",
-            ability_type=AbilityType.UI,
-            description="Tracks and responds to user interactions",
-            handler=self._handle_interaction_context
+        self.ability_awareness.register_ability(
+            ability_name="interaction_awareness",
+            handler=self._handle_interaction_awareness,
+            description="Tracks and responds to user interactions"
         )
-            
+        
     async def _register_mouse_tracking(self):
         """Register mouse tracking abilities"""
-        await self.ability_awareness.register_ability(
-            name="Mouse Tracking",
-            ability_type=AbilityType.UI,
-            description="Tracks mouse position and behavior",
-            handler=self._handle_mouse_tracking
+        self.ability_awareness.register_ability(
+            ability_name="mouse_tracking",
+            handler=self._handle_mouse_tracking,
+            description="Tracks mouse movement and interactions"
         )
-
+        
     async def _handle_window_management(self, context: Dict[str, Any]) -> AbilityStatus:
         """Handle window management operations"""
         try:
@@ -78,22 +75,22 @@ class UIAbilitiesRegistrar:
             logger.error(f"Window management error: {e}")
             return AbilityStatus.FAILURE
 
-    async def _handle_layout_adaptation(self, context: Dict[str, Any]) -> AbilityStatus:
-        """Handle layout adaptation operations"""
+    async def _handle_layout_management(self, context: Dict[str, Any]) -> AbilityStatus:
+        """Handle layout management operations"""
         try:
             # Implementation here
             return AbilityStatus.SUCCESS
         except Exception as e:
-            logger.error(f"Layout adaptation error: {e}")
+            logger.error(f"Layout management error: {e}")
             return AbilityStatus.FAILURE
 
-    async def _handle_interaction_context(self, context: Dict[str, Any]) -> AbilityStatus:
-        """Handle interaction context operations"""
+    async def _handle_interaction_awareness(self, context: Dict[str, Any]) -> AbilityStatus:
+        """Handle interaction awareness operations"""
         try:
             # Implementation here
             return AbilityStatus.SUCCESS
         except Exception as e:
-            logger.error(f"Interaction context error: {e}")
+            logger.error(f"Interaction awareness error: {e}")
             return AbilityStatus.FAILURE
 
     async def _handle_mouse_tracking(self, context: Dict[str, Any]) -> AbilityStatus:

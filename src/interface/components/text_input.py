@@ -226,3 +226,15 @@ class TextInput(QWidget):
 
     def setPlaceholderText(self, text):
         self.text_input.setPlaceholderText(text)
+
+    def clear(self):
+        """Clear the text input"""
+        self.text_input.clear()
+        
+    def text(self):
+        """Get the current text"""
+        return self.text_input.toPlainText()
+        
+    def setText(self, text):
+        """Set the text input content"""
+        self.text_input.setPlainText(text)

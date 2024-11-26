@@ -29,12 +29,40 @@ class GeminiBrain:
         self._file_cache = {}
         self.interaction_context = {}
         self.is_processing = False
+        self._chat = None
+        self._stop_requested = False
         
         # Register abilities from model manager
         self.abilities = {}
         for ability_name, ability_data in self.model_manager.abilities.items():
             self.abilities[ability_name] = ability_data["enabled"]
-        
+            
+        # Initialize chat if model is ready
+        if self.model_manager.model:
+            self._init_chat()
+            
+    def _init_chat(self):
+        """Initialize chat session"""
+        try:
+            if not self.model_manager.model:
+                logger.error("Model not initialized")
+                return
+            self._chat = self.model_manager.model.start_chat(history=[])
+            logger.info("Chat session initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize chat: {e}")
+            raise
+            
+    async def initialize(self):
+        """Initialize the brain with API key"""
+        try:
+            await self.model_manager.initialize_model()
+            logger.info("Brain initialized successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to initialize brain: {e}")
+            raise
+            
     async def process_input(self, 
         message: str, 
         context: Optional[Dict] = None,
@@ -98,10 +126,7 @@ class GeminiBrain:
             }
             
             # Generate response
-            response = await self.model_manager.generate_response(
-                message,
-                context=model_context
-            )
+            response = await self.generate_response(message)
             
             # Update conversation history
             self.conversation_manager.add_to_history(
@@ -184,41 +209,14 @@ class GeminiBrain:
             return False
 
     async def validate_api_key(self, api_key: str) -> bool:
-        """Validate API key with optimized response time"""
+        """Validate the API key"""
         try:
-            # Configure API key
-            genai.configure(api_key=api_key)
-            
-            # Use a lightweight model configuration for validation
-            model = genai.GenerativeModel('gemini-pro',
-                generation_config={
-                    "temperature": 0.1,  # Lower temperature for faster response
-                    "max_output_tokens": 10,  # Minimal output needed
-                    "candidate_count": 1
-                },
-                safety_settings={
-                    HarmCategory.HARASSMENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                    HarmCategory.HATE_SPEECH: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                    HarmCategory.SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                    HarmCategory.DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE
-                }
-            )
-            
-            # Quick validation with minimal prompt
-            response = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: model.generate_content("Hi", stream=False)
-            )
-            
-            if response:
-                self.model_manager.model = model
-                logger.info("API key validated successfully")
-                return True
-            
-            return False
-            
+            # Set the API key in model manager
+            self.model_manager.api_key = api_key
+            await self.model_manager.initialize_model()
+            return await self.model_manager.validate_api_key(api_key)
         except Exception as e:
-            logger.error(f"API key validation failed: {e}")
+            logger.error(f"Error validating API key: {e}")
             return False
 
     def _enrich_context(self, context: Dict) -> Dict:
@@ -279,32 +277,43 @@ class GeminiBrain:
         
         return enriched
 
-    async def generate_response(self, message: str, context: Optional[Dict] = None, functions: Optional[List[Dict]] = None) -> Union[str, Dict]:
-        """Generate a response using the Gemini model"""
+    async def generate_response(self, message: str) -> str:
+        """Generate a response to the given message"""
+        self._stop_requested = False
+        
         try:
-            if not self.model_manager.model:
-                raise ValueError("Model not initialized. Please set API key first.")
-            
-            # Enrich context with all available information
-            enriched_context = self._enrich_context(context)
-            
-            # Generate response with context and optional functions
-            response = await self.model_manager.generate_response(
-                message,
-                context=enriched_context,
-                functions=functions
+            logger.debug("Starting response generation...")
+            if not self._chat:
+                logger.debug("No chat session found, initializing...")
+                self._init_chat()
+                
+            if not self._chat:
+                logger.error("No chat session available")
+                return "I'm sorry, but I'm not properly initialized yet. Please try again in a moment."
+                
+            # Generate response with stop check
+            logger.debug("Sending message to model...")
+            response = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self._chat.send_message(message)
             )
             
-            # Handle function call responses
-            if isinstance(response, dict) and 'function_name' in response:
-                # Process function call here if needed
-                return response
+            logger.debug(f"Raw response from model: {response}")
             
-            return response.strip()
+            if self._stop_requested:
+                logger.info("Stopping response generation")
+                return ""
+                
+            if not response or not hasattr(response, 'text'):
+                logger.error("Invalid response from model")
+                return "I apologize, but I couldn't generate a proper response. Please try again."
+                
+            logger.info(f"Generated response: {response.text[:100]}...")  # Log first 100 chars
+            return response.text
             
         except Exception as e:
-            logger.error(f"Error generating response: {str(e)}")
-            raise
+            logger.error(f"Error generating response: {str(e)}\n{traceback.format_exc()}")
+            return f"I encountered an error: {str(e)}"
 
     async def think(self, message: str, context: Dict, history: List[Dict]) -> str:
         """Process a message with context and history to generate a response"""
@@ -317,7 +326,7 @@ class GeminiBrain:
             context['conversation_history'] = history
             functions = self.conversation_manager.get_available_functions()
             
-            return await self.generate_response(message, context, functions)
+            return await self.generate_response(message)
             
         except Exception as e:
             logger.error(f"Error in thinking process: {str(e)}")
@@ -341,8 +350,14 @@ class GeminiBrain:
 
     def request_stop(self):
         """Request to stop the current response generation"""
-        self.model_manager.request_stop()
-
+        logger.info("Stop requested")
+        self._stop_requested = True
+        if self._chat:
+            try:
+                self._init_chat()  # Reset chat session
+            except:
+                pass
+        
     async def update_interaction_context(self, context: dict):
         """Update brain's understanding of UI interaction context"""
         try:

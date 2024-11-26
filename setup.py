@@ -18,6 +18,7 @@ OPTIONS = {
         'scipy',
         'qasync',
         'asyncio',
+        'sparkle',  # For auto-updates
     ],
     'includes': [
         'google.generativeai',
@@ -38,11 +39,16 @@ OPTIONS = {
         'CFBundleShortVersionString': "3.0.0",
         'NSHighResolutionCapable': True,
         'LSMinimumSystemVersion': '10.13.0',
+        'SUFeedURL': 'https://raw.githubusercontent.com/yourusername/octavia/main/appcast.xml',  # Update this URL
+        'SUPublicEDKey': '',  # Will be filled after code signing
+        'SUEnableAutomaticChecks': True,
+        'SUAllowsAutomaticUpdates': True,
     }
 }
 
 setup(
     name="octavia",
+    version="3.0.0",
     app=APP,
     data_files=DATA_FILES,
     options={'py2app': OPTIONS},

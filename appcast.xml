@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel>
+        <title>Octavia Updates</title>
+        <description>Most recent changes with links to updates.</description>
+        <language>en</language>
+        <item>
+            <title>Version 3.0.0</title>
+            <sparkle:version>3.0.0</sparkle:version>
+            <description>
+                <![CDATA[
+                    <h2>Initial Release</h2>
+                    <ul>
+                        <li>First public release of Octavia</li>
+                        <li>Gemini-powered AI assistant</li>
+                        <li>Native macOS interface</li>
+                    </ul>
+                ]]>
+            </description>
+            <pubDate>Tue, 26 Nov 2024 00:00:00 +0000</pubDate>
+            <enclosure
+                url="https://github.com/supremeesimon/octavia/releases/download/v3.0.0/Octavia-3.0.0.dmg"
+                sparkle:version="3.0.0"
+                length="0"
+                type="application/octet-stream"
+                sparkle:edSignature=""
+            />
+        </item>
+    </channel>
+</rss>
