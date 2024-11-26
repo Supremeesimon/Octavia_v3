@@ -6,6 +6,7 @@ from typing import Dict, List, Optional, Any, Callable
 from enum import Enum
 import asyncio
 from loguru import logger
+import threading
 
 from ..awareness.consciousness import Consciousness
 
@@ -32,38 +33,49 @@ class ToolSystem:
     """Manages tool registration and execution"""
     _instance = None
     _initialized = False
+    _lock = threading.Lock()
     
     def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+            return cls._instance
     
     def __init__(self):
-        if not ToolSystem._initialized:
-            self.tools: Dict[str, Dict[str, Any]] = {}
-            self.consciousness: Optional[Consciousness] = None
-            ToolSystem._initialized = True
+        with self._lock:
+            if not ToolSystem._initialized:
+                self.tools: Dict[str, Dict[str, Any]] = {}
+                self.consciousness: Optional[Consciousness] = None
+                self._registered_tools = set()  # Track registered tools
+                ToolSystem._initialized = True
             
     async def initialize(self):
         """Initialize tool system asynchronously"""
-        if not self.consciousness:
-            self.consciousness = Consciousness()
-            await self.consciousness.initialize()
+        with self._lock:
+            if not self.consciousness:
+                self.consciousness = Consciousness()
+                await self.consciousness.initialize()
         
     def register_tool(self, name: str, func: Callable, category: ToolCategory,
                      parameters: List[ToolParameter], description: str):
         """Register a new tool"""
-        try:
-            self.tools[name] = {
-                'function': func,
-                'category': category,
-                'parameters': parameters,
-                'description': description
-            }
-            logger.info(f"Registered tool: {name}")
-            
-        except Exception as e:
-            logger.error(f"Error registering tool {name}: {e}")
+        with self._lock:
+            if name in self._registered_tools:
+                logger.debug(f"Tool {name} already registered")
+                return
+                
+            try:
+                self.tools[name] = {
+                    'function': func,
+                    'category': category,
+                    'parameters': parameters,
+                    'description': description
+                }
+                self._registered_tools.add(name)
+                logger.info(f"Registered tool: {name}")
+                
+            except Exception as e:
+                logger.error(f"Error registering tool {name}: {e}")
             
     async def execute_tool(self, name: str, **kwargs) -> Any:
         """Execute a registered tool"""
@@ -71,15 +83,16 @@ class ToolSystem:
             await self.initialize()
             
         try:
-            if name not in self.tools:
-                raise ValueError(f"Tool {name} not found")
+            with self._lock:
+                if name not in self.tools:
+                    raise ValueError(f"Tool {name} not found")
+                    
+                tool = self.tools[name]
                 
-            tool = self.tools[name]
+                # Validate parameters
+                self._validate_parameters(tool['parameters'], kwargs)
             
-            # Validate parameters
-            self._validate_parameters(tool['parameters'], kwargs)
-            
-            # Execute tool
+            # Execute tool outside lock to prevent deadlocks
             result = await tool['function'](**kwargs)
             
             # Record tool usage
@@ -101,17 +114,14 @@ class ToolSystem:
     async def _record_tool_usage(self, name: str, success: bool):
         """Record tool usage in consciousness"""
         if self.consciousness:
-            try:
-                await self.consciousness.process_input({
-                    "type": "tool_usage",
-                    "content": {
-                        "tool_name": name,
-                        "success": success,
-                        "timestamp": asyncio.get_event_loop().time()
-                    }
-                })
-            except Exception as e:
-                logger.error(f"Error recording tool usage: {e}")
+            await self.consciousness.process_input({
+                "type": "tool_usage",
+                "content": {
+                    "tool_name": name,
+                    "success": success,
+                    "timestamp": asyncio.get_event_loop().time()
+                }
+            })
 
 def tool(name: str, category: ToolCategory, parameters: List[ToolParameter], description: str):
     """Decorator for registering tools"""

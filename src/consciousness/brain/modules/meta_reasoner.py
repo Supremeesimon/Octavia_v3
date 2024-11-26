@@ -2,7 +2,7 @@
 Meta-reasoning system for Octavia's predictive and fallback capabilities.
 """
 
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Union
 from dataclasses import dataclass
 from enum import Enum
 import os
@@ -39,6 +39,9 @@ class MetaReasoner:
     """Handles predictive reasoning and fallback strategies"""
     
     def __init__(self):
+        self.spatial_context = {}
+        self.temporal_context = {}
+        self.interaction_history = []
         self._action_graph = self._initialize_action_graph()
         self._context_history = []
         self._successful_strategies = {}
@@ -145,6 +148,14 @@ class MetaReasoner:
             ActionContext.FILE: file_actions
         }
     
+    def check_current_location(self) -> dict:
+        """Check the current location context"""
+        return self.spatial_context
+        
+    def update_spatial_context(self, context: dict):
+        """Update spatial awareness context"""
+        self.spatial_context.update(context)
+        
     def predict_next_actions(self, current_context: Dict) -> List[ActionNode]:
         """Predict likely next actions based on current context"""
         relevant_actions = []
@@ -241,3 +252,72 @@ class MetaReasoner:
         """Update the success rate of strategies"""
         if success:
             self._successful_strategies[action] = self._successful_strategies.get(action, 0) + 1
+            
+    def analyze_directory_structure(self, path: str = None) -> dict:
+        """Analyze the directory structure for spatial context
+        
+        Args:
+            path: Optional path to analyze. Uses current path if None.
+            
+        Returns:
+            dict: Directory structure analysis
+        """
+        try:
+            current_path = path or os.getcwd()
+            return {
+                "current_path": current_path,
+                "parent": os.path.dirname(current_path),
+                "is_dir": os.path.isdir(current_path),
+                "exists": os.path.exists(current_path)
+            }
+        except Exception as e:
+            logger.error(f"Error analyzing directory structure: {e}")
+            return {}
+    
+    def get_related_files(self, context: Union[str, Dict]) -> List[str]:
+        """Get files related to the given context
+        
+        Args:
+            context: Either a file path string or a context dictionary containing file path
+            
+        Returns:
+            List[str]: List of related file paths
+        """
+        try:
+            # Extract file path from context if it's a dict
+            if isinstance(context, dict):
+                file_path = context.get('file_path')
+                if not file_path:
+                    return []
+            else:
+                file_path = context
+                
+            if not os.path.exists(file_path):
+                return []
+                
+            directory = os.path.dirname(file_path)
+            base_name = os.path.basename(file_path)
+            name_without_ext = os.path.splitext(base_name)[0]
+            
+            related = []
+            
+            # Check directory for related files
+            for f in os.listdir(directory):
+                if f == base_name:
+                    continue
+                    
+                # Check for files with similar names
+                if name_without_ext in f:
+                    related.append(os.path.join(directory, f))
+                    
+                # Check for common related file patterns
+                if f.startswith('test_' + name_without_ext) or \
+                   f.endswith('_test.py') or \
+                   f.startswith(name_without_ext + '_test'):
+                    related.append(os.path.join(directory, f))
+                    
+            return related
+            
+        except Exception as e:
+            logger.error(f"Error getting related files: {e}")
+            return []

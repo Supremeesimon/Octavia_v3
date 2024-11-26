@@ -28,13 +28,15 @@ class Config:
         self.GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
         
         # Model Configuration
-        self.DEFAULT_MODEL = "gemini-pro"
-        self.CODE_MODEL = "gemini-pro-code"
+        self.DEFAULT_MODEL = "gemini-1.5-flash"  # Updated to latest model
         
         # System Configuration
-        self.MAX_HISTORY_LENGTH = 10
         self.DEFAULT_TEMPERATURE = 0.7
         self.MAX_OUTPUT_TOKENS = 2048
+        self.TOP_K = 20
+        self.TOP_P = 0.95
+        self.CANDIDATE_COUNT = 1
+        self.MAX_ACTIVE_LENGTH = 1000000  # 1M tokens for conversation history
         
     @property
     def as_dict(self) -> Dict[str, Any]:
@@ -47,8 +49,10 @@ class Config:
             "tasks_db": str(self.TASKS_DB),
             "memory_db": str(self.MEMORY_DB),
             "default_model": self.DEFAULT_MODEL,
-            "code_model": self.CODE_MODEL,
-            "max_history_length": self.MAX_HISTORY_LENGTH,
             "temperature": self.DEFAULT_TEMPERATURE,
-            "max_output_tokens": self.MAX_OUTPUT_TOKENS
+            "max_output_tokens": self.MAX_OUTPUT_TOKENS,
+            "top_k": self.TOP_K,
+            "top_p": self.TOP_P,
+            "candidate_count": self.CANDIDATE_COUNT,
+            "max_active_length": self.MAX_ACTIVE_LENGTH
         }

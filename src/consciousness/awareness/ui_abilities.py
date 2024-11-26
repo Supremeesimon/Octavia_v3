@@ -148,3 +148,60 @@ class UIAbilityMetrics:
             "effectiveness": self.effectiveness_metrics.get(ability_name, 0.0),
             "feedback": [f for f in self.user_feedback if f["ability"] == ability_name]
         }
+
+class UIAbilitiesRegistrarNew:
+    """Handles registration of UI abilities"""
+    
+    def __init__(self, ui_awareness):
+        self.ui_awareness = ui_awareness
+        
+    def register_default_abilities(self):
+        """Register default UI abilities"""
+        try:
+            # Register basic UI abilities
+            self.ui_awareness.register_ability(
+                "list_files",
+                self._list_files,
+                "List files in current directory"
+            )
+            
+            self.ui_awareness.register_ability(
+                "show_file_content",
+                self._show_file_content,
+                "Show content of a file"
+            )
+            
+            self.ui_awareness.register_ability(
+                "navigate_directory",
+                self._navigate_directory,
+                "Navigate to different directory"
+            )
+            
+            logger.info("Default UI abilities registered successfully")
+            
+        except Exception as e:
+            logger.error(f"Error registering default abilities: {e}")
+            
+    def _list_files(self, directory=None):
+        """List files in directory"""
+        try:
+            # Implementation will be added
+            pass
+        except Exception as e:
+            logger.error(f"Error listing files: {e}")
+            
+    def _show_file_content(self, filepath):
+        """Show content of file"""
+        try:
+            # Implementation will be added
+            pass
+        except Exception as e:
+            logger.error(f"Error showing file content: {e}")
+            
+    def _navigate_directory(self, path):
+        """Navigate to directory"""
+        try:
+            # Implementation will be added
+            pass
+        except Exception as e:
+            logger.error(f"Error navigating directory: {e}")

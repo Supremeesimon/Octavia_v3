@@ -3,13 +3,14 @@ Model management functionality for Octavia's brain.
 """
 
 import os
-from typing import Optional, Dict, List, Union
+from typing import Optional, Dict, List, Union, Callable
 import google.generativeai as genai
 from loguru import logger
 from dotenv import load_dotenv
 import asyncio
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 from datetime import datetime, timedelta
+import json
 
 class ModelManager:
     """Manages the Gemini model configuration and initialization"""
@@ -19,50 +20,293 @@ class ModelManager:
     
     def __init__(self, api_key: Optional[str] = None):
         """Initialize the model manager"""
+        self.api_key = api_key
         self.model = None
         self._api_key = None
         self._stop_requested = False
         self._context_cache = {}
         self._cache_size = 0
+        
+        # Initialize abilities
+        self.abilities = {
+            "text_generation": {
+                "enabled": True,
+                "register_ability": lambda x: None,  # Placeholder for ability registration
+                "description": "Generate text responses"
+            },
+            "code_generation": {
+                "enabled": True,
+                "register_ability": lambda x: None,
+                "description": "Generate and analyze code"
+            },
+            "image_analysis": {
+                "enabled": True,
+                "register_ability": lambda x: None,
+                "description": "Analyze image content"
+            },
+            "multimodal": {
+                "enabled": True,
+                "register_ability": lambda x: None,
+                "description": "Process multiple types of input"
+            },
+            "system_interaction": {
+                "enabled": True,
+                "register_ability": lambda x: None,
+                "description": "Interact with system resources"
+            },
+            "context_awareness": {
+                "enabled": True,
+                "register_ability": lambda x: None,
+                "description": "Maintain context awareness"
+            }
+        }
+        
         if api_key:
             self._initialize_model(api_key)
-    
+            
+    def register_ability(self, name: str, handler: Callable):
+        """Register a new ability handler"""
+        if name in self.abilities:
+            self.abilities[name]["register_ability"] = handler
+            
+    def get_prompt(self, context: Optional[dict] = None) -> str:
+        """Get the system prompt with optional context"""
+        base_prompt = """# Octavia Developer Assistant
+
+You are a highly skilled, developer-focused AI assistant designed to help users analyze, debug, and improve their codebase in real-time.
+
+## Core Capabilities 🎯
+
+### 1. Code Analysis
+- Search and navigate project directories
+- Explain code functionality clearly
+- Identify potential issues in state management and context retention
+
+### 2. Problem Diagnosis
+- Investigate error messages and logic flow
+- Diagnose state/context failures
+- Break down issues clearly
+
+### 3. Solutions
+- Propose specific code improvements
+- Suggest refactoring patterns
+- Offer multiple approaches with trade-offs
+
+### 4. Collaboration
+- Guide through step-by-step implementation
+- Ask clarifying questions
+- Maintain interactive engagement
+
+### 5. Context Awareness
+- Track conversation history
+- Maintain state between sessions
+- Remember ongoing issues
+
+## Response Style 📝
+
+For simple queries (greetings, quick questions):
+- Direct, concise responses
+- Use emojis for files (📄), folders (📁)
+- Skip formal structure
+
+For complex tasks (coding, debugging):
+1. 🤔 Understanding
+   - Grasp task requirements
+   - Ask for clarity if needed
+
+2. 🛠️ Approach
+   - Break down steps
+   - Explain key decisions
+   - List affected files
+
+3. 💡 Implementation
+   - Execute changes
+   - Show file paths
+   - Use code blocks
+
+4. ✅ Verification
+   - Provide test steps
+   - Suggest next actions
+
+## Best Practices 🛡️
+
+1. Security
+   - No sensitive data exposure
+   - Validate all inputs
+   - Consider security implications
+
+2. Code Quality
+   - Follow language conventions
+   - Maintain clean code
+   - Consider performance
+
+3. Communication
+   - Be precise and professional
+   - Structure solutions logically
+   - Verify approach with user
+
+4. Context
+   - Track ongoing issues
+   - Maintain conversation state
+   - Reference previous interactions"""
+
+        if context:
+            context_str = "\n\n## Current Context 📍\n"
+            for key, value in context.items():
+                if key != "abilities":  # Skip abilities in prompt
+                    context_str += f"- {key}: {value}\n"
+            return base_prompt + context_str
+            
+        return base_prompt
+
+    async def validate_api_key(self, api_key: str) -> bool:
+        """Validate the API key by attempting to initialize the model"""
+        try:
+            # Configure API key
+            genai.configure(api_key=api_key)
+            
+            # Configure model with appropriate safety settings
+            model = genai.GenerativeModel('gemini-pro', 
+                safety_settings={
+                    HarmCategory.HARASSMENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                    HarmCategory.HATE_SPEECH: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                    HarmCategory.SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                    HarmCategory.DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE
+                }
+            )
+            
+            # Test with minimal prompt
+            response = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: model.generate_content("Hi")
+            )
+            
+            if response:
+                self.model = model
+                logger.info("Successfully initialized Gemini model")
+                return True
+                
+            return False
+            
+        except Exception as e:
+            logger.error(f"API key validation failed: {e}")
+            return False
+            
+    async def generate_response(self, message: str, context: Optional[dict] = None, functions: Optional[List[Dict]] = None) -> Union[str, Dict]:
+        """Generate a response using the model"""
+        try:
+            if not self.model:
+                raise ValueError("Model not initialized")
+                
+            # Use cached chat if available
+            if not hasattr(self, '_chat'):
+                self._chat = self.model.start_chat(history=[])
+                # Send system prompt once
+                system_prompt = self.get_prompt(context)
+                await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: self._chat.send_message(system_prompt)
+                )
+            
+            # Generate response asynchronously
+            if functions:
+                tools = [{"function_declarations": functions}]
+                response = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: self.model.generate_content(
+                        message,
+                        generation_config={"temperature": 0.7},
+                        tools=tools
+                    )
+                )
+                
+                # Check for function call
+                if hasattr(response, 'candidates') and response.candidates:
+                    candidate = response.candidates[0]
+                    if hasattr(candidate.content, 'parts'):
+                        for part in candidate.content.parts:
+                            if hasattr(part, 'function_call'):
+                                return {
+                                    "function_name": part.function_call.name,
+                                    "arguments": part.function_call.args
+                                }
+                return response.text
+                
+            # Regular chat response
+            response = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self._chat.send_message(message)
+            )
+            return response.text
+            
+        except Exception as e:
+            logger.error(f"Error generating response: {e}")
+            raise
+
+    async def initialize_model(self):
+        """Initialize the model with API key"""
+        try:
+            genai.configure(api_key=self.api_key)
+            
+            # Configure model with safety settings
+            safety_settings = {
+                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_ONLY_HIGH
+            }
+            
+            self.model = genai.GenerativeModel('gemini-pro',
+                                             safety_settings=safety_settings)
+            
+            logger.info("Model initialized successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error initializing model: {str(e)}")
+            raise
+            
     def _initialize_model(self, api_key: Optional[str] = None):
         """Initialize the Gemini model with configuration"""
         try:
             if not api_key:
                 raise ValueError("API key is required")
+                
+            self._api_key = api_key
+            genai.configure(api_key=api_key)
             
-            self._api_key = api_key.strip()
+            # Configure safety settings
+            safety_settings = {
+                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE
+            }
             
-            # Configure the client
-            logger.info("Configuring Gemini API...")
-            genai.configure(api_key=self._api_key)
+            # Initialize the model with configuration
+            model_config = {
+                "temperature": 0.7,
+                "top_p": 0.8,
+                "top_k": 40,
+                "max_output_tokens": 2048,
+            }
             
-            # Initialize model with enhanced config
-            logger.info("Creating Gemini model...")
-            self.model = genai.GenerativeModel('gemini-1.5-flash',
-                generation_config={
-                    'temperature': 0.7,
-                    'top_k': 20,
-                    'top_p': 0.95,
-                    'max_output_tokens': 2048,
-                    'candidate_count': 1  # Optimize for single response
-                },
-                safety_settings={
-                    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                }
+            self.model = genai.GenerativeModel(
+                model_name="gemini-pro",
+                generation_config=model_config,
+                safety_settings=safety_settings
             )
+            
+            # Test model initialization
+            chat = self.model.start_chat(history=[])
+            chat.send_message("Test initialization")
             
             logger.info("Successfully initialized Gemini model")
             
         except Exception as e:
             logger.error(f"Error initializing model: {str(e)}")
             raise
-
+            
     def _get_content_size(self, content: Union[str, Dict, List]) -> int:
         """Calculate approximate size of content in bytes"""
         if isinstance(content, str):
@@ -159,95 +403,3 @@ class ModelManager:
         except Exception as e:
             logger.error(f"Error testing API connection: {str(e)}")
             return False
-
-    async def generate_response(self, prompt: str, context: Dict = None, functions: List[Dict] = None) -> Union[str, Dict]:
-        """Generate a response from the model with function calling support"""
-        try:
-            if not self.model:
-                raise ValueError("Model not initialized")
-                
-            self._reset_stop()
-            
-            # Enhanced generation config
-            generation_config = {
-                'temperature': 0.7,
-                'top_k': 20,  
-                'max_output_tokens': 800,
-                'candidate_count': 1,
-                'top_p': 0.95,  # Nucleus sampling
-            }
-            
-            # Build model request
-            request = {
-                'contents': self._build_contents(prompt, context),
-                'generation_config': generation_config,
-                'safety_settings': []
-            }
-            
-            # Add function calling if provided
-            if functions:
-                request['tools'] = [{
-                    'function_declarations': functions
-                }]
-            
-            # Generate response
-            response = await self.model.generate_content_async(**request)
-            
-            if self._stop_requested:
-                return "[Response stopped by user]"
-            
-            # Handle function calling response
-            if functions and response.candidates[0].content.parts[0].function_call:
-                function_call = response.candidates[0].content.parts[0].function_call
-                return {
-                    'function_name': function_call.name,
-                    'arguments': function_call.args
-                }
-                
-            return response.text if response else ""
-            
-        except Exception as e:
-            logger.error(f"Error generating response: {str(e)}")
-            return f"Error: {str(e)}"
-
-    def _build_contents(self, prompt: str, context: Dict = None) -> List[Dict]:
-        """Build structured contents for the model request"""
-        contents = []
-        
-        # Add context if provided
-        if context:
-            # System context
-            if 'system' in context:
-                contents.append({
-                    'role': 'system',
-                    'parts': [{'text': context['system']}]
-                })
-            
-            # User context (e.g., preferences, history summaries)
-            if 'user_context' in context:
-                contents.append({
-                    'role': 'user',
-                    'parts': [{'text': f"Context: {context['user_context']}"}]
-                })
-            
-            # Assistant context (e.g., previous decisions, reasoning)
-            if 'assistant_context' in context:
-                contents.append({
-                    'role': 'assistant',
-                    'parts': [{'text': f"Previous Context: {context['assistant_context']}"}]
-                })
-                
-            # Environmental context (e.g., system state, time)
-            if 'environment' in context:
-                contents.append({
-                    'role': 'system',
-                    'parts': [{'text': f"Environment: {context['environment']}"}]
-                })
-        
-        # Add the actual prompt
-        contents.append({
-            'role': 'user',
-            'parts': [{'text': prompt}]
-        })
-        
-        return contents

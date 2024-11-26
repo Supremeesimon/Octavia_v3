@@ -4,7 +4,7 @@ Octavia's UI Awareness System - Tracks and manages UI state and interactions
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, Any, List, Tuple, Union
 from PySide6.QtCore import QPoint
 from loguru import logger
 
@@ -35,9 +35,39 @@ class UIAwarenessSystem:
     def __init__(self):
         self.mouse_context = None
         self.ui_state = UIState()
+        self.visible_messages = []  # Initialize visible messages list
         self.interaction_history = []
         self.attention_patterns = {}
+        self._abilities = {}
+        self._register_default_abilities()
         
+    def _register_default_abilities(self):
+        """Register default UI abilities"""
+        # Add base abilities 
+        self.register_ability("register_ability", self.register_ability, "Register new UI ability")
+            
+    def register_ability(self, ability_name: str, handler: callable, description: str = None) -> bool:
+        """Register a UI ability"""
+        try:
+            if not hasattr(handler, '__call__'):
+                logger.error(f"Handler for {ability_name} must be callable")
+                return False
+                
+            self._abilities[ability_name] = {
+                'handler': handler,
+                'enabled': True,
+                'description': description or f'UI ability: {ability_name}'
+            }
+            logger.info(f"Registered UI ability: {ability_name}")
+            return True
+        except Exception as e:
+            logger.error(f"Error registering ability {ability_name}: {e}")
+            return False
+            
+    def get_ability(self, name: str) -> dict:
+        """Get a registered ability by name"""
+        return self._abilities.get(name)
+            
     def update_mouse_context(self, context: Dict[str, Any]) -> None:
         """Update current mouse context"""
         try:
@@ -135,3 +165,8 @@ class UIAwarenessSystem:
                 "ui_state": self.ui_state
             }
         })
+
+    @property
+    def abilities(self):
+        """Get all registered abilities"""
+        return self._abilities

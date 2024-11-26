@@ -45,8 +45,13 @@ class MainWindow(QMainWindow):
         
         # Initialize UI awareness systems
         self.ui_awareness = UIAwarenessSystem()
-        self.ui_observer = UIObserver(self)
-        self.installEventFilter(self.ui_observer)  # Install event filter
+        
+        # Initialize UI abilities registrar
+        self.abilities_registrar = UIAbilitiesRegistrar(self.ui_awareness)
+        self.abilities_registrar.register_default_abilities()
+        
+        # Initialize UI observer
+        self._initialize_ui_observer()
         
         # Connect UI observer to awareness system
         self.ui_observer.interaction_detected.connect(self._handle_ui_interaction)
@@ -63,12 +68,13 @@ class MainWindow(QMainWindow):
         
         # For typewriter effect
         self.typewriter_timer = QTimer(self)  # Ensure timer has parent
-        self.typewriter_timer.setInterval(20)  # 20ms between updates (slower)
+        self.typewriter_timer.setInterval(5)  # Faster updates: 5ms instead of 20ms
         self.typewriter_timer.timeout.connect(self._typewriter_update)
         self.current_response = ""
         self.displayed_chars = 0
         self._current_bubble = None  # Initialize bubble reference
-        self.chars_per_update = 3  # Reduced from 10 to 3 chars per update
+        self.chars_per_update = 10  # Increased from 3 to 10 chars per update
+        self.skip_typewriter_threshold = 50  # Skip typewriter for short responses
         logger.debug("Typewriter effect configured")
         
         # Apply styles from external stylesheet
@@ -120,6 +126,16 @@ class MainWindow(QMainWindow):
         # Initialize UI abilities after brain is ready
         self.ui_abilities = None
         
+    def _initialize_ui_observer(self):
+        """Initialize UI observer"""
+        try:
+            self.ui_observer = UIObserver(QApplication.instance(), self.ui_awareness, self)
+            self.installEventFilter(self.ui_observer)
+            logger.info("UI observer initialized")
+        except Exception as e:
+            logger.error(f"Error initializing UI observer: {e}")
+            raise
+
     def _process_async(self):
         """Process pending async operations"""
         try:
@@ -133,53 +149,34 @@ class MainWindow(QMainWindow):
             import traceback
             logger.error(traceback.format_exc())
 
-    def _on_api_key_inserted(self, key: str):
-        """Handle API key insertion by scheduling async validation"""
-        logger.info("API key inserted - scheduling validation...")
+    async def _on_api_key_inserted(self, api_key: str):
+        """Handle API key insertion"""
         try:
-            # Update UI to show validation in progress
-            self.text_input.setEnabled(False)
-            self.text_input.setPlaceholderText("Validating API key...")
+            # Show loading state
+            self.left_panel.set_loading_state(True)
             
-            # Schedule async validation
-            asyncio.create_task(self._handle_api_key(key))
-            
-        except Exception as e:
-            logger.error(f"Error scheduling API key validation: {str(e)}")
-            self.text_input.setEnabled(False)
-            self.text_input.setPlaceholderText("Error validating key - please try again")
-            self.left_panel.set_api_error("Error validating key")
-
-    async def _handle_api_key(self, key: str):
-        """Handle API key validation"""
-        logger.info("Attempting API key validation...")
-        try:
-            # Initialize model with key first
-            self.brain.model_manager._initialize_model(key)
-            
-            # Test the API key with a simple query
-            if await self.brain.model_manager.test_connection():
+            # Validate API key with timeout
+            async with asyncio.timeout(5.0):  # 5 second timeout
+                is_valid = await self.brain.validate_api_key(api_key)
+                
+            if is_valid:
                 logger.info("API key validated successfully")
-                self.text_input.setEnabled(True)
-                self.text_input.setPlaceholderText("Type your message...")
-                self.left_panel.set_api_success()
-                
-                # Initialize UI abilities after brain is ready
-                self.ui_abilities = UIAbilitiesRegistrar(self.brain.abilities)
-                await self.ui_abilities.register_ui_abilities()
-                
+                self.left_panel.show_success_message("API key validated!")
             else:
-                logger.error("API key validation failed - invalid key")
-                self.text_input.setEnabled(False)
-                self.text_input.setPlaceholderText("Invalid API key - please try again")
-                self.left_panel.set_api_error("Invalid API key")
+                logger.warning("Invalid API key")
+                self.left_panel.show_error_message("Invalid API key. Please try again.")
                 
-        except Exception as e:
-            logger.error(f"API key validation failed with error: {str(e)}")
-            self.text_input.setEnabled(False)
-            self.text_input.setPlaceholderText("Connection error - please try again")
-            self.left_panel.set_api_error("Connection error - please try again")
+        except asyncio.TimeoutError:
+            logger.error("API key validation timed out")
+            self.left_panel.show_error_message("Validation timed out. Please try again.")
             
+        except Exception as e:
+            logger.error(f"Error validating API key: {e}")
+            self.left_panel.show_error_message(f"Error: {str(e)}")
+            
+        finally:
+            self.left_panel.set_loading_state(False)
+
     def _handle_message(self, message: str):
         """Handle incoming message from text input."""
         try:
@@ -243,51 +240,30 @@ class MainWindow(QMainWindow):
         self.displayed_chars = 0
 
     def _typewriter_update(self):
-        """Update typewriter effect"""
-        try:
-            if not self.current_response:
-                logger.debug("No current response to update")
-                self.typewriter_timer.stop()
-                return
-
-            if self.displayed_chars == 0:
-                logger.debug("Creating new message bubble")
-                # Create initial empty message
-                self.chat_display.add_message("", is_user=False)
-
-            # Calculate next chunk of text to display
-            remaining = len(self.current_response) - self.displayed_chars
-            next_chars = min(self.chars_per_update, remaining)
-            
-            if next_chars > 0:
-                # Update the current message with more text
-                displayed_text = self.current_response[:self.displayed_chars + next_chars]
-                self.chat_display.update_last_message(displayed_text)
-                self.displayed_chars += next_chars
-                
-                # If this is the last update, finish the message
-                if self.displayed_chars >= len(self.current_response):
-                    logger.debug("Typewriter effect complete")
-                    self.typewriter_timer.stop()
-                    self.chat_display.finish_message()
-                    self.text_input.message_processed()  # Re-enable input
-                    self.current_response = ""
-                    self.displayed_chars = 0
-            else:
-                # No more characters to display
-                logger.debug("No more characters to display")
-                self.typewriter_timer.stop()
-                self.chat_display.finish_message()
-                self.text_input.message_processed()
-                self.current_response = ""
-                self.displayed_chars = 0
-                
-        except Exception as e:
-            logger.error(f"Error in typewriter update: {str(e)}")
+        """Update typewriter effect display"""
+        if not self._current_bubble or not self.current_response:
             self.typewriter_timer.stop()
-            self.chat_display.finish_message()
-            self.text_input.message_processed()
-            
+            return
+
+        # Skip typewriter for short responses
+        if len(self.current_response) <= self.skip_typewriter_threshold:
+            self._current_bubble.set_content(self.current_response)
+            self.typewriter_timer.stop()
+            self.displayed_chars = len(self.current_response)
+            return
+
+        # Calculate chunk to display
+        end_pos = min(self.displayed_chars + self.chars_per_update, len(self.current_response))
+        current_text = self.current_response[:end_pos]
+        
+        # Update display
+        self._current_bubble.set_content(current_text)
+        self.displayed_chars = end_pos
+        
+        # Stop timer when done
+        if self.displayed_chars >= len(self.current_response):
+            self.typewriter_timer.stop()
+
     def _handle_ui_interaction(self, context: dict):
         """Handle UI interaction events from observer"""
         try:

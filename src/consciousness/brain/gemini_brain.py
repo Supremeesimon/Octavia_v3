@@ -30,6 +30,11 @@ class GeminiBrain:
         self.interaction_context = {}
         self.is_processing = False
         
+        # Register abilities from model manager
+        self.abilities = {}
+        for ability_name, ability_data in self.model_manager.abilities.items():
+            self.abilities[ability_name] = ability_data["enabled"]
+        
     async def process_input(self, 
         message: str, 
         context: Optional[Dict] = None,
@@ -176,6 +181,44 @@ class GeminiBrain:
                 
         except Exception as e:
             logger.error(f"Error setting API key: {str(e)}")
+            return False
+
+    async def validate_api_key(self, api_key: str) -> bool:
+        """Validate API key with optimized response time"""
+        try:
+            # Configure API key
+            genai.configure(api_key=api_key)
+            
+            # Use a lightweight model configuration for validation
+            model = genai.GenerativeModel('gemini-pro',
+                generation_config={
+                    "temperature": 0.1,  # Lower temperature for faster response
+                    "max_output_tokens": 10,  # Minimal output needed
+                    "candidate_count": 1
+                },
+                safety_settings={
+                    HarmCategory.HARASSMENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                    HarmCategory.HATE_SPEECH: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                    HarmCategory.SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                    HarmCategory.DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE
+                }
+            )
+            
+            # Quick validation with minimal prompt
+            response = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: model.generate_content("Hi", stream=False)
+            )
+            
+            if response:
+                self.model_manager.model = model
+                logger.info("API key validated successfully")
+                return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"API key validation failed: {e}")
             return False
 
     def _enrich_context(self, context: Dict) -> Dict:
