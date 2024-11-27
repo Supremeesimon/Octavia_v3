@@ -290,30 +290,52 @@ class GeminiBrain:
             if not self._chat:
                 logger.error("No chat session available")
                 return "I'm sorry, but I'm not properly initialized yet. Please try again in a moment."
-                
-            # Generate response with stop check
-            logger.debug("Sending message to model...")
-            response = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self._chat.send_message(message)
-            )
             
-            logger.debug(f"Raw response from model: {response}")
+            # Generate response with streaming
+            logger.debug("Starting streaming response...")
+            response_chunks = []
+            async for chunk in self.generate_stream(message):
+                if self._stop_requested:
+                    logger.info("Response generation stopped by user")
+                    break
+                response_chunks.append(chunk)
             
-            if self._stop_requested:
-                logger.info("Stopping response generation")
-                return ""
-                
-            if not response or not hasattr(response, 'text'):
-                logger.error("Invalid response from model")
-                return "I apologize, but I couldn't generate a proper response. Please try again."
-                
-            logger.info(f"Generated response: {response.text[:100]}...")  # Log first 100 chars
-            return response.text
+            # Combine chunks into final response
+            response = "".join(response_chunks)
+            logger.debug(f"Response generation complete: {len(response)} chars")
+            
+            return response
             
         except Exception as e:
-            logger.error(f"Error generating response: {str(e)}\n{traceback.format_exc()}")
-            return f"I encountered an error: {str(e)}"
+            logger.error(f"Error generating response: {str(e)}")
+            return f"I apologize, but I encountered an error: {str(e)}"
+
+    async def generate_stream(self, message: str):
+        """Generate a streaming response"""
+        self._stop_requested = False
+        
+        try:
+            logger.debug("Starting streaming response generation...")
+            if not self._chat:
+                logger.debug("No chat session found, initializing...")
+                self._init_chat()
+                
+            if not self._chat:
+                logger.error("No chat session available")
+                yield "I'm sorry, but I'm not properly initialized yet. Please try again in a moment."
+                return
+                
+            # Generate streaming response
+            async for chunk in self.model_manager.generate_stream(message):
+                if self._stop_requested:
+                    logger.info("Response generation stopped by user")
+                    break
+                yield chunk
+                await asyncio.sleep(0)  # Allow other tasks to run
+                
+        except Exception as e:
+            logger.error(f"Error generating response: {str(e)}")
+            yield f"I apologize, but I encountered an error: {str(e)}"
 
     async def think(self, message: str, context: Dict, history: List[Dict]) -> str:
         """Process a message with context and history to generate a response"""

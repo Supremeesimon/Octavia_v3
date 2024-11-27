@@ -2,7 +2,7 @@
 Message bubble component for individual chat messages
 """
 
-from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout, QVBoxLayout, QSizePolicy, QPushButton, QFrame
+from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout, QVBoxLayout, QSizePolicy, QPushButton, QFrame, QApplication
 from PySide6.QtCore import Qt, QDateTime, QSize
 from PySide6.QtGui import QIcon, QGuiApplication
 import markdown
@@ -134,8 +134,8 @@ class MessageBubble(QFrame):
         layout.addLayout(msg_layout)
         layout.addLayout(time_layout)
             
-    def update_text(self, text):
-        """Update the message text"""
+    def update_text(self, text: str):
+        """Update the message text with typewriter effect"""
         self.raw_text = text
         
         # Convert markdown to HTML with code highlighting
@@ -152,6 +152,19 @@ class MessageBubble(QFrame):
         # Apply syntax highlighting CSS
         self.label.setText(html_text)
         self.label.adjustSize()
+        
+        # Process events in smaller chunks to prevent UI lock
+        if len(text) % 50 == 0:  # Process every 50 characters
+            QApplication.processEvents()
+            
+        # Force scroll to bottom with each update
+        chat_display = self.parent()
+        if chat_display:
+            # Get the scroll area (parent of chat display)
+            scroll_area = chat_display.parent()
+            if scroll_area and hasattr(scroll_area, 'verticalScrollBar'):
+                scrollbar = scroll_area.verticalScrollBar()
+                scrollbar.setValue(scrollbar.maximum())
         
         # Update timestamp
         current_time = QDateTime.currentDateTime().toString("hh:mm AP")

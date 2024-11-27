@@ -6,15 +6,16 @@ from PySide6.QtWidgets import (QWidget, QHBoxLayout, QTextEdit, QPushButton,
                               QVBoxLayout, QLabel)
 from PySide6.QtCore import Signal, Qt, QTimer, QEvent, Property
 from .toggle_switch import ToggleSwitch
-
+from loguru import logger
 
 class TextInput(QWidget):
     message_sent = Signal(str)
     mode_changed = Signal(bool)
     stop_requested = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, main_window, parent=None):
         super().__init__(parent)
+        self.main_window = main_window  # Store reference to main window
         self.action_mode = False  # Set chat mode as default
         self.setup_ui()
         self.setup_connections()
@@ -79,14 +80,18 @@ class TextInput(QWidget):
                 font-size: 20px;
             }
             QPushButton#sendButton[stop="true"] {
-                background: #eadfd0;
-                color: #8B7355;
-                font-family: Arial;
+                background: #d4c5b3;
+                color: #6b563f;
+                font-size: 14px;
                 font-weight: bold;
             }
             QPushButton#sendButton:hover {
                 background: #e8dcc8;
                 color: #8B7355;
+            }
+            QPushButton#sendButton[stop="true"]:hover {
+                background: #c4b5a3;
+                color: #5b462f;
             }
         """)
         right_layout.addWidget(self.send_button)
@@ -146,38 +151,46 @@ class TextInput(QWidget):
             if event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
                 # Send message on Enter without Shift
                 if not event.modifiers() & Qt.ShiftModifier:
-                    self._send_message()
+                    self._on_return_pressed()
                     return True
                 # Allow Shift+Enter for new line
                 return False
         return super().eventFilter(obj, event)
 
-    def _send_message(self):
-        if not self._enabled:
-            return
+    def _on_return_pressed(self):
+        """Handle return key press"""
+        try:
+            # Get message
+            message = self.text_input.toPlainText().strip()
+            if not message:
+                return
+                
+            # Clear input immediately
+            self.text_input.clear()
+            self.text_input.setPlainText("")
             
-        if self._is_sending:
-            # If currently sending, treat as stop button
-            self.stop_requested.emit()
-            return
+            # Add message to chat display immediately
+            self.main_window.chat_display.add_message(message, is_user=True)
             
-        message = self.text_input.toPlainText().strip()
-        if message:
-            # Start loading state
-            self._is_sending = True
-            self.text_input.setEnabled(False)
-            self.send_button.setText("⏹")
-            self.send_button.setProperty("stop", True)
-            self.send_button.style().unpolish(self.send_button)
-            self.send_button.style().polish(self.send_button)
-            self.send_button.setToolTip("Stop Octavia's response")
-            
-            # Emit message
+            # Emit message signal for processing
             self.message_sent.emit(message)
             
-            # Clear input and reset height
-            self.text_input.clear()
-            self._reset_height()
+            # Set processing state
+            self.set_processing_state(True)
+            
+            # Keep focus on text input
+            self.text_input.setFocus()
+            
+            # Scroll chat to bottom
+            QTimer.singleShot(50, self.main_window.chat_display._ensure_scrolled_to_bottom)
+            
+        except Exception as e:
+            logger.error(f"Error in text input: {str(e)}")
+            self.main_window.chat_display.append_system_message(f"Error: {str(e)}")
+
+    def _send_message(self):
+        """Legacy method - kept for compatibility"""
+        self._on_return_pressed()
 
     def message_processed(self):
         """Call this when the message has been processed"""
@@ -238,3 +251,37 @@ class TextInput(QWidget):
     def setText(self, text):
         """Set the text input content"""
         self.text_input.setPlainText(text)
+
+    def set_processing_state(self, is_processing: bool):
+        """Set the processing state of the input"""
+        self._is_sending = is_processing
+        self.text_input.setEnabled(not is_processing)
+        
+        # Update button appearance and function
+        if is_processing:
+            self.send_button.setText("⬛")  # Stop square
+            self.send_button.setProperty("stop", True)
+            self.send_button.setToolTip("Stop Octavia")
+            self.send_button.clicked.disconnect()
+            self.send_button.clicked.connect(self._stop_generation)
+        else:
+            self.send_button.setText("→")
+            self.send_button.setProperty("stop", False)
+            self.send_button.setToolTip("Send message")
+            self.send_button.clicked.disconnect()
+            self.send_button.clicked.connect(self._send_message)
+            
+        # Update button style
+        self.send_button.style().unpolish(self.send_button)
+        self.send_button.style().polish(self.send_button)
+        
+    def _stop_generation(self):
+        """Handle stop button click"""
+        self.stop_requested.emit()
+        # Let main window handle the stop through brain
+        self.main_window.handle_stop()
+        self.set_processing_state(False)
+
+    def is_processing(self) -> bool:
+        """Return whether input is in processing state"""
+        return self._is_sending

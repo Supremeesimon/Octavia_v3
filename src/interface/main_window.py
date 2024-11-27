@@ -82,6 +82,9 @@ class MainWindow(QMainWindow):
         # Setup UI components
         self._setup_ui()
         
+        # Set initial focus to text input
+        QTimer.singleShot(100, lambda: self.text_input.text_input.setFocus())
+        
     async def initialize(self):
         """Async initialization of components"""
         logger.info("Running async initialization...")
@@ -155,18 +158,17 @@ class MainWindow(QMainWindow):
     def _handle_message(self, message: str):
         """Handle incoming message from text input."""
         try:
-            # Add user message to chat immediately
-            self.chat_display.add_message(message, is_user=True)
-            self.text_input.clear()  # Clear input right away
+            # Set processing state immediately
+            self.text_input.set_processing_state(True)
             
             # Create and start task
             task = asyncio.create_task(self._process_message(message))
-            task.add_done_callback(lambda _: self.text_input.message_processed())
+            task.add_done_callback(lambda _: self.text_input.set_processing_state(False))
             
         except Exception as e:
             logger.error(f"Error in _handle_message: {str(e)}")
             self.chat_display.add_message(f"Error processing message: {str(e)}", is_user=False)
-            self.text_input.message_processed()
+            self.text_input.set_processing_state(False)
 
     async def _process_message(self, message: str):
         """Process a message asynchronously"""
@@ -177,13 +179,17 @@ class MainWindow(QMainWindow):
             self._current_bubble = self.chat_display.add_message("", is_user=False)
             
             logger.debug("Generating response...")
-            # Generate response
-            response = await self.brain.generate_response(message)
-            
-            # Start typewriter effect
-            self.current_response = response
+            # Generate response with streaming
+            response_chunks = []
+            self.current_response = ""
             self.displayed_chars = 0
             self.typewriter_timer.start()
+            
+            async for chunk in self.brain.generate_stream(message):
+                response_chunks.append(chunk)
+                self.current_response = "".join(response_chunks)
+                # Let the typewriter effect catch up
+                await asyncio.sleep(0.01)
             
             logger.info("Response generated successfully")
             
@@ -192,7 +198,7 @@ class MainWindow(QMainWindow):
             # Show error in chat
             self.chat_display.append_system_message(f"Error: {str(e)}")
             # Reset text input state
-            self.text_input.message_processed()
+            self.text_input.set_processing_state(False)
 
     def _handle_stop(self):
         """Handle stop request from text input"""
@@ -207,11 +213,18 @@ class MainWindow(QMainWindow):
         # Request stop from brain
         if self.brain:
             self.brain.request_stop()
+            # Add stop message to conversation
+            asyncio.create_task(self._handle_stop_message())
             
-        # Reset the text input state
-        self.text_input.message_processed()
-        self.current_response = ""
-        self.displayed_chars = 0
+    async def _handle_stop_message(self):
+        """Generate a contextual stop message through the brain"""
+        try:
+            message = "The user has requested to stop. How should I acknowledge this?"
+            async for chunk in self.brain.generate_stream(message):
+                self.chat_display.update_last_message(chunk)
+        except Exception as e:
+            logger.error(f"Error generating stop message: {e}")
+            self.chat_display.add_message("I noticed you wanted me to stop. Feel free to ask me something else!", is_user=False)
 
     def _typewriter_update(self):
         """Update typewriter effect display"""
@@ -307,7 +320,7 @@ class MainWindow(QMainWindow):
         input_layout.setSpacing(0)
         
         # Add text input with stretch
-        self.text_input = TextInput()
+        self.text_input = TextInput(self)
         self.text_input.message_sent.connect(self._handle_message)  # Use message_sent instead of message_submitted
         self.text_input.stop_requested.connect(self._handle_stop)
         input_layout.addWidget(self.text_input, 1)  # Add stretch factor

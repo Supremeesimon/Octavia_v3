@@ -23,46 +23,29 @@ class ModelManager:
         """Initialize the model manager"""
         self.api_key = api_key
         self.model = None
-        self._api_key = None
-        self._stop_requested = False
-        self._context_cache = {}
-        self._cache_size = 0
-        
-        # Initialize abilities
-        self.abilities = {
-            "text_generation": {
-                "enabled": True,
-                "register_ability": lambda x: None,  # Placeholder for ability registration
-                "description": "Generate text responses"
-            },
-            "code_generation": {
-                "enabled": True,
-                "register_ability": lambda x: None,
-                "description": "Generate and analyze code"
-            },
-            "image_analysis": {
-                "enabled": True,
-                "register_ability": lambda x: None,
-                "description": "Analyze image content"
-            },
-            "multimodal": {
-                "enabled": True,
-                "register_ability": lambda x: None,
-                "description": "Process multiple types of input"
-            },
-            "system_interaction": {
-                "enabled": True,
-                "register_ability": lambda x: None,
-                "description": "Interact with system resources"
-            },
-            "context_awareness": {
-                "enabled": True,
-                "register_ability": lambda x: None,
-                "description": "Maintain context awareness"
-            }
+        self.generation_config = {
+            'temperature': 0.7,
+            'top_p': 0.8,
+            'top_k': 40,
+            'max_output_tokens': 2048,
+        }
+        self.safety_settings = {
+            'HARASSMENT': 'block_none',
+            'HATE_SPEECH': 'block_none',
+            'SEXUALLY_EXPLICIT': 'block_none',
+            'DANGEROUS_CONTENT': 'block_none'
         }
         
-        # Initialize model immediately if API key provided
+        # Register available abilities
+        self.abilities = {
+            'code_generation': {'enabled': True},
+            'code_explanation': {'enabled': True},
+            'code_review': {'enabled': True},
+            'debugging': {'enabled': True},
+            'refactoring': {'enabled': True}
+        }
+        
+        # Initialize if API key provided
         if api_key:
             self.initialize_model_sync()
             
@@ -263,6 +246,30 @@ For complex tasks (coding, debugging):
             
         except Exception as e:
             logger.error(f"Error generating response: {e}")
+            raise
+
+    async def generate_stream(self, message: str) -> str:
+        """Generate a streaming response from the model"""
+        try:
+            if not self.model:
+                raise ValueError("Model not initialized")
+                
+            # Create streaming response
+            response = self.model.generate_content(
+                message,
+                stream=True,
+                generation_config=self.generation_config
+            )
+            
+            # Stream response chunks
+            for chunk in response:
+                if not chunk.text:
+                    continue
+                yield chunk.text
+                await asyncio.sleep(0)  # Allow other tasks to run
+                
+        except Exception as e:
+            logger.error(f"Error in generate_stream: {e}")
             raise
 
     def initialize_model_sync(self):
